@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# Secretos y config local — NUNCA al repo (decisión #7: .env en fases 1-3)
+.env
+*.env.local
+
+# SO / editor
+.DS_Store
+Thumbs.db

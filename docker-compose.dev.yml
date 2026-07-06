@@ -1,0 +1,28 @@
+# Postgres LOCAL solo para desarrollo y tests.
+# La base "de verdad" es Neon (decisión #1); cambiar de una a otra es solo
+# cambiar DATABASE_URL en .env — el código no distingue.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#   docker compose -f docker-compose.dev.yml down        (conserva los datos)
+#   docker compose -f docker-compose.dev.yml down -v     (borra el volumen)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sentinel-dev-postgres
+    environment:
+      POSTGRES_USER: sentinel
+      POSTGRES_PASSWORD: sentinel # solo dev local; jamás en producción
+      POSTGRES_DB: sentinel
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinel -d sentinel"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

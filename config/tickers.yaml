@@ -1,0 +1,45 @@
+# Universo de series — config-driven (brief: los tickers NUNCA van hardcodeados).
+# En fase 3 este fichero se montará como ConfigMap; el código no cambia.
+
+cef_credit: # CEFs de crédito — el universo principal a vigilar
+  - WDI
+  - KIO
+  - BIT
+  - HYT
+  - BTZ
+  - BHK
+  - DSL
+  - FSCO
+  - BGH
+  - ARDC
+  - GHY
+  - OPP
+  - PDI
+  - PDO
+  - PTY
+
+cef_contrast: # CEFs de contraste (alto ROC), para comparar comportamiento
+  - BCAT
+  - ECAT
+  - ADX
+  - BST
+
+benchmarks: # Índices / FX / oro de referencia (sintaxis de Yahoo Finance)
+  - ^GSPC
+  - ^VIX
+  - GLD
+  - EURUSD=X
+
+fred_series: # Series macro de FRED (ingestor propio, no yfinance)
+  - BAMLH0A0HYM2 # ICE BofA US High Yield OAS (diferencial de crédito HY)
+  - DGS10 # Treasury a 10 años
+  - WILL5000PR # Wilshire 5000 (numerador del indicador Buffett)
+  - GDP # PIB nominal trimestral (denominador del Buffett)
+
+defaults:
+  # Si un ticker no tiene datos aún, el backfill arranca aquí.
+  # ~10 años: suficiente para z-scores a 1 año con contexto de ciclo completo.
+  price_history_start: "2015-01-01"
+  # Días que re-pedimos por detrás del último dato al reanudar (over-fetch):
+  # corrige la última vela si se guardó parcial y absorbe revisiones de Yahoo.
+  overlap_days: 5

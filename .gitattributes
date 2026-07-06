@@ -1,0 +1,4 @@
+# Normaliza fin de línea a LF en el repo y en el checkout.
+# Motivo: desarrollamos en Windows pero el código corre en contenedores Linux;
+# un CRLF colado en un script o SQL puede dar errores crípticos dentro de la imagen.
+* text=auto eol=lf

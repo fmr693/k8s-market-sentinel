@@ -1,0 +1,33 @@
+[project]
+name = "sentinel"
+version = "0.1.0"
+description = "k8s-market-sentinel: CEF discount watchtower (medallion on Postgres, K8s-native)"
+requires-python = ">=3.11"
+dependencies = [
+    # Driver Postgres moderno (psycopg 3). [binary] trae el wheel precompilado:
+    # sin toolchain de C en Windows ni en la imagen Docker.
+    "psycopg[binary]>=3.2",
+    "yfinance>=0.2.40",
+    "PyYAML>=6.0",
+    # Solo carga .env en desarrollo local; en K8s las env vars vienen del Secret
+    # y python-dotenv NO pisa variables ya definidas.
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+# El dispatcher CLI (decisión #5): una imagen, varias caras.
+# `sentinel migrate`, `sentinel ingest-prices`, y en el futuro `poller`, `nav`, `alerts`.
+sentinel = "sentinel.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
