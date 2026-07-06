@@ -8,7 +8,8 @@
 - ✅ **Fase de decisiones cerrada** — 7/7 dudas resueltas (la #7 marcada como provisional).
 - ✅ **Fase 1 completada** (2026-07-06): esquema medallón en **Neon** + 4 ingestores validados en la nube con idempotencia comprobada — precios yfinance (60.780 velas), FRED (3.707 obs.), FX BCE (2.946 fixings) y **NAV CEFConnect** (4.646 NAVs diarios, 19/19 CEFs). La capa gold produce **descuentos y z-scores reales** que coinciden al céntimo con los publicados por CEFConnect (validación externa por camino independiente).
 - ✅ **Fase 2 completada** (2026-07-06): imagen única `sentinel:dev` (python:3.13-slim, non-root, 481 MB) con las 5 caras del CLI; validada ejecutando `migrate` + ingestas reales contra Neon desde el contenedor.
-- ➡️ **Siguiente:** Fase 3 — k3s/k3d: namespace, Secret, ConfigMap del universo, CronJobs del carril lento.
+- ✅ **Fase 3 completada en k3d local** (2026-07-07): namespace + Secret/ConfigMap generados por kustomize + 4 CronJobs con `timeZone: Europe/Madrid`; validado end-to-end (Job de migración + CronJob disparado a mano ingiriendo contra Neon desde el clúster). **Pendiente**: replicar en el k3s del Ubuntu (requiere publicar la imagen en GHCR).
+- ➡️ **Siguiente:** Fase 4 (poller intradía) o publicar imagen + desplegar en el Ubuntu.
 
 ## Decisiones (resuelven las 7 dudas abiertas del brief)
 
@@ -40,6 +41,9 @@ Tomadas al implementar la fundación; todas con puerta de escape documentada:
 14. *(Fase 2, 2026-07-06)* **Imagen: `python:3.13-slim`, un solo stage, non-root.** Sin multi-stage porque todas las deps llegan como wheels precompilados — no hay toolchain que separar (puerta de escape documentada en el Dockerfile). slim y no alpine: musl obligaría a compilar pandas. Usuario `sentinel` (uid 1000) para que K8s pueda exigir `runAsNonRoot`. `ENTRYPOINT ["sentinel"]` + `CMD ["--help"]`: K8s elige la cara vía `args:`. Cache mount de BuildKit para pip. 481 MB (pandas/numpy pesan; asumido para una imagen de datos).
 15. *(Fase 2)* **`pip install -e .` DENTRO de la imagen**: el paquete queda en `/app/src` y `REPO_ROOT=/app` resuelve `config/` y `db/migrations` en las mismas rutas relativas que en desarrollo. Con install normal el código iría a site-packages y esas rutas se romperían. Escape futuro: package-data con `importlib.resources`.
 16. *(Fase 2)* **Secretos jamás en la imagen**: `.env` excluido por `.dockerignore` (además de `.gitignore`). Local: `docker run --env-file .env`; K8s: Secret → env vars. Validado end-to-end: la imagen ejecutó `migrate`, `ingest-fx` e `ingest-prices` contra Neon.
+17. *(Fase 3, 2026-07-07)* **kustomize con generadores, kustomization.yaml en la RAÍZ del repo.** El ConfigMap del universo se genera desde `config/tickers.yaml` y el Secret desde `.env` (una sola fuente de verdad; secretos fuera del repo). En la raíz porque kustomize se niega a leer ficheros fuera de su directorio (LoadRestrictionsRootOnly). `disableNameSuffixHash: true`: los consumidores son Jobs que nacen en cada ejecución (el rollout que motiva el hash no aplica) y `job-migrate.yaml` puede referenciar nombres estables. Despliegue = `kubectl apply -k .`
+18. *(Fase 3)* **CronJobs con `timeZone: "Europe/Madrid"`** (los horarios viven en mi zona, DST incluido), `concurrencyPolicy: Forbid`, `startingDeadlineSeconds: 3600` — una ejecución perdida por tener la máquina apagada NO se recupera: el backfill idempotente se pone al día en la siguiente (el diseño del brief hecho spec de K8s). Migraciones = Job puntual con `generateName` (se lanza con `kubectl create`, no forma parte del estado deseado).
+19. *(Fase 3)* **Dos lecciones de infra aprendidas en vivo:** (a) el kubelet de K8s ≥1.35 **se niega a arrancar sobre cgroup v1** — la VM de WSL2 lo usa por defecto; arreglo: `C:\Users\Felipe\.wslconfig` con `kernelCommandLine = cgroup_no_v1=all` + `wsl --shutdown` (el Ubuntu del servidor no lo necesitará). (b) Con `runAsNonRoot: true`, el `USER` de la imagen debe ser **numérico** (`USER 1000`): el kubelet no lee `/etc/passwd` de la imagen y con un nombre falla con `CreateContainerConfigError`.
 
 ## Roadmap (fases del brief) con estado
 
@@ -48,7 +52,7 @@ Tomadas al implementar la fundación; todas con puerta de escape documentada:
 | 0 | Decisiones de arquitectura (7 dudas abiertas) | ✅ Hecho |
 | 1 | Fundación: esquema bronze/silver/gold + 4 ingestores (precios, FRED, FX, NAV) con backfill idempotente, fuentes validadas | ✅ Hecho (2026-07-06) |
 | 2 | Contenerización: Dockerfile, `.env.example`, secrets fuera del repo | ✅ Hecho (2026-07-06) |
-| 3 | k3s en Ubuntu: namespace, Secrets, ConfigMap de tickers, CronJobs del carril lento | ⬜ |
+| 3 | k3s en Ubuntu: namespace, Secrets, ConfigMap de tickers, CronJobs del carril lento | ✅ Validado en k3d local (2026-07-07); Ubuntu pendiente de GHCR |
 | 4 | Poller intradía: Deployment con lógica de horario de mercado + festivos USA | ⬜ |
 | 5 | Capa gold + Grafana: queries de descuento/z-score/Buffett, dashboards provisionados | ⬜ |
 | 6 | Alertas Telegram con reglas declarativas en ConfigMap | ⬜ |
