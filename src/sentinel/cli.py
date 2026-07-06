@@ -18,6 +18,7 @@ from . import db
 from .config import load_universe
 from .ingest.fx import ingest_fx_rates
 from .ingest.macro import ingest_macro_series
+from .ingest.nav import ingest_navs
 from .ingest.prices import ingest_daily_prices
 from .migrations import apply_migrations
 
@@ -75,6 +76,16 @@ def main(argv: list[str] | None = None) -> int:
         help='Subconjunto de pares "EUR/USD" (por defecto, todos los de config)',
     )
 
+    p_nav = sub.add_parser(
+        "ingest-nav",
+        help="NAV diario de los CEFs desde CEFConnect (último año, upsert completo)",
+    )
+    p_nav.add_argument(
+        "--tickers",
+        nargs="*",
+        help="Subconjunto de CEFs (por defecto, todos los del universo)",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "migrate":
@@ -103,6 +114,12 @@ def main(argv: list[str] | None = None) -> int:
         with db.connect() as conn:
             result = ingest_fx_rates(conn, universe, args.pairs)
         return _print_ingest_summary(result, "fixings")
+
+    if args.command == "ingest-nav":
+        universe = load_universe()
+        with db.connect() as conn:
+            result = ingest_navs(conn, universe, args.tickers)
+        return _print_ingest_summary(result, "NAVs")
 
     return 2  # unreachable con required=True
 

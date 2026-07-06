@@ -61,6 +61,11 @@ class Universe:
         """Todo lo que se ingesta vía yfinance (CEFs + benchmarks)."""
         return self.cef_credit + self.cef_contrast + self.benchmarks
 
+    @property
+    def nav_tickers(self) -> list[str]:
+        """Solo los CEFs: los benchmarks (índices, FX, oro) no tienen NAV."""
+        return self.cef_credit + self.cef_contrast
+
 
 def load_universe(path: Path | None = None) -> Universe:
     # TICKERS_FILE permite que K8s apunte al fichero montado del ConfigMap.
