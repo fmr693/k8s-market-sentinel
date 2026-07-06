@@ -6,8 +6,8 @@
 ## Estado general
 
 - ✅ **Fase de decisiones cerrada** — 7/7 dudas resueltas (la #7 marcada como provisional).
-- 🔶 **Fase 1 en curso** (2026-07-06): repo git creado; esquema medallón migrado; ingestor de precios yfinance funcionando y validado contra Postgres local (backfill + idempotencia comprobadas).
-- ➡️ **Siguiente:** resto de fase 1 — ingestor FRED, ingestor FX (BCE/frankfurter) y spike de CEFConnect para el NAV.
+- 🔶 **Fase 1 en curso** (2026-07-06): esquema medallón desplegado en **Neon** (proyecto creado ✓); ingestor de precios (universo completo: 60.780 velas) e ingestor FRED (3.707 observaciones) funcionando y validados en la nube con idempotencia comprobada. Semáforos ya consultables: HY OAS y Buffett operativos en gold.
+- ➡️ **Siguiente:** resto de fase 1 — ingestor FX (BCE/frankfurter) y spike de CEFConnect para el NAV.
 
 ## Decisiones (resuelven las 7 dudas abiertas del brief)
 
@@ -32,6 +32,8 @@ Tomadas al implementar la fundación; todas con puerta de escape documentada:
 7. **Sin ORM ni framework de config**: psycopg3 a pelo, SQL visible, `argparse` para el dispatcher. El proyecto es SQL-céntrico y formativo; menos magia = más comprensión.
 8. **Commit por ticker** en la ingesta: si el proceso muere a mitad del universo, lo ingerido queda a salvo y la siguiente ejecución se autorrepara. Un ticker que falla no tumba a los demás; el exit code del CLI refleja fallos (los Jobs de K8s se enteran por ahí).
 9. **Tests**: lógica pura (ventana de backfill, parseo) con unit tests; el upsert idempotente se valida contra Postgres real (docker-compose.dev.yml), no con mocks.
+10. **Numerador del Buffett → `^W5000` vía yfinance** (decisión de Michael, 2026-07-06). WILL5000PR fue **eliminada de FRED** (Wilshire dejó de publicar allí en 2023; la API devuelve 400). Alternativas evaluadas: ^W5000 diario (proxy del market cap, reutiliza el ingestor de precios) vs serie Z.1 trimestral oficial (BOGZ1LM893064105Q, ~2,5 meses de retraso). Se eligió frescura diaria; la vista gold lee de `silver.prices_daily` (migración 0004).
+11. **Ingestor FRED**: mismo patrón que precios con solape de **30 días** (FRED revisa hacia atrás — comprobado en vivo: el segundo run recogió una revisión del PIB de Q4-2025). Los huecos `value="."` se omiten. `urllib` de la stdlib, sin dependencia nueva.
 
 ## Roadmap (fases del brief) con estado
 
@@ -50,8 +52,7 @@ Tomadas al implementar la fundación; todas con puerta de escape documentada:
 
 - **Secretos (#7):** revisar la arquitectura en detalle al llegar a la fase GitOps.
 - **Spike CEFConnect (#3):** validar endpoint/cobertura/estabilidad antes de fijar la fuente de NAV al 100%.
-- **Prerrequisito pendiente:** crear el proyecto en Neon y obtener la connection string (de momento se desarrolla contra el Postgres local de docker-compose.dev.yml; cambiar es solo editar DATABASE_URL en .env).
-- **⚠️ WILL5000PR posiblemente discontinuada:** Wilshire dejó de publicar en FRED (~fin 2023). Verificar con la API (requiere key; el acceso anónimo devuelve 403) al construir el ingestor macro. Alternativa si está muerta: serie Z.1 de la Fed (equities corporativas, p. ej. NCBEILQ027S) como numerador del Buffett.
+- **BAMLH0A0HYM2 limitada a ~3 años vía API** (restricción de licencia ICE, verificada en el payload de bronze: se pidió desde 2015 y FRED devolvió desde 2023-07-04). Suficiente de sobra para el z-score a 1 año; documentar en el README como limitación conocida.
 - **Festivos USA (Fase 4):** decidir librería del calendario de mercado (¿`exchange_calendars`?) — sigue abierta en el brief.
 
 ---
