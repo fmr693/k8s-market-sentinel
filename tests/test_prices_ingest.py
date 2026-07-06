@@ -11,7 +11,8 @@ import math
 import pandas as pd
 import pytest
 
-from sentinel.ingest.prices import compute_fetch_start, dataframe_to_rows
+from sentinel.ingest.common import compute_fetch_start
+from sentinel.ingest.prices import dataframe_to_rows
 
 DEFAULT_START = dt.date(2015, 1, 1)
 

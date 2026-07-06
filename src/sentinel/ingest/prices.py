@@ -29,6 +29,7 @@ import yfinance as yf
 from psycopg.types.json import Jsonb
 
 from ..config import Universe
+from .common import compute_fetch_start
 
 log = logging.getLogger(__name__)
 
@@ -54,16 +55,6 @@ ON CONFLICT (ticker, trading_date) DO UPDATE SET
     volume = EXCLUDED.volume,
     ingested_at = now()
 """
-
-
-def compute_fetch_start(
-    last_date: dt.date | None, default_start: dt.date, overlap_days: int
-) -> dt.date:
-    """Desde qué fecha pedir: histórico completo si la tabla está vacía,
-    o (último dato − solape) para reanudar autorreparando."""
-    if last_date is None:
-        return default_start
-    return last_date - dt.timedelta(days=overlap_days)
 
 
 def _to_float(value) -> float | None:
