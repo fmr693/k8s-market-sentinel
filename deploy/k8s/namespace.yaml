@@ -1,0 +1,8 @@
+# Namespace propio: aísla todo lo del proyecto (recursos, secretos, RBAC
+# futuro) y permite borrarlo entero con un solo comando si hace falta.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sentinel
+  labels:
+    app.kubernetes.io/part-of: k8s-market-sentinel

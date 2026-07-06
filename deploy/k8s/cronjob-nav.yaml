@@ -1,0 +1,55 @@
+# Carril lento #2: NAV diario desde CEFConnect.
+# 23:20 — un poco después del cierre. Matiz documentado: CEFConnect puede
+# publicar el NAV del día más tarde (madrugada CET); si esta ejecución no lo
+# pilla, el upsert de la ventana 1Y lo recoge al día siguiente. Autosanado.
+# (Las decisiones comunes están comentadas en cronjob-prices.yaml.)
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ingest-nav
+  labels:
+    app.kubernetes.io/part-of: k8s-market-sentinel
+spec:
+  schedule: "20 23 * * 1-5"
+  timeZone: "Europe/Madrid"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: k8s-market-sentinel
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+          containers:
+            - name: ingest-nav
+              image: sentinel:dev
+              imagePullPolicy: IfNotPresent
+              args: ["ingest-nav"]
+              envFrom:
+                - secretRef:
+                    name: sentinel-env
+              env:
+                - name: TICKERS_FILE
+                  value: /config/tickers.yaml
+              volumeMounts:
+                - name: tickers
+                  mountPath: /config
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  memory: 512Mi
+          volumes:
+            - name: tickers
+              configMap:
+                name: sentinel-tickers

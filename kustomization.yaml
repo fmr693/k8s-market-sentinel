@@ -1,0 +1,42 @@
+# Punto de entrada del despliegue:  kubectl apply -k .   (desde la raíz)
+#
+# ¿Por qué en la raíz y no en deploy/k8s/? Porque kustomize, por seguridad,
+# se niega a leer ficheros FUERA de su directorio (LoadRestrictionsRootOnly),
+# y los generadores de abajo necesitan config/tickers.yaml y .env. Desde la
+# raíz, todo queda "debajo" y no hay que duplicar ficheros.
+#
+# Los generadores son la clave del diseño config-driven:
+# - El ConfigMap del universo se GENERA desde config/tickers.yaml: una sola
+#   fuente de verdad — editas el YAML, re-aplicas, y el ConfigMap se
+#   actualiza. Nada de mantener dos copias sincronizadas a mano.
+# - El Secret se GENERA desde .env (que está en .gitignore): los secretos
+#   llegan al clúster sin pisar jamás el repo. En la fase GitOps esto se
+#   sustituirá por SOPS+age (decisión #7, provisional).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: sentinel
+
+resources:
+  - deploy/k8s/namespace.yaml
+  - deploy/k8s/cronjob-prices.yaml
+  - deploy/k8s/cronjob-nav.yaml
+  - deploy/k8s/cronjob-fx.yaml
+  - deploy/k8s/cronjob-macro.yaml
+
+configMapGenerator:
+  - name: sentinel-tickers
+    files:
+      - tickers.yaml=config/tickers.yaml
+
+secretGenerator:
+  - name: sentinel-env
+    envs:
+      - .env
+
+generatorOptions:
+  # Nombres estables (sin sufijo-hash): nuestros consumidores son Jobs que
+  # nacen en cada ejecución y siempre leen la versión vigente — el rollout
+  # automático que motiva el hash no aplica. Y job-migrate.yaml (fuera de
+  # kustomize) puede referenciar 'sentinel-env' sin adivinar sufijos.
+  disableNameSuffixHash: true

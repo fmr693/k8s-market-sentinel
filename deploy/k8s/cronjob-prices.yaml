@@ -1,0 +1,64 @@
+# Carril lento #1: velas diarias del universo completo (yfinance).
+#
+# Decisiones comunes a los 4 CronJobs (se comentan solo aquí):
+# - timeZone "Europe/Madrid": el horario vive en MI zona, con DST incluido.
+#   Sin este campo habría que hacer cuentas UTC↔CET dos veces al año.
+# - concurrencyPolicy Forbid: si una ejecución se alarga, la siguiente no se
+#   solapa (dos backfills simultáneos del mismo ticker = carrera inútil).
+# - startingDeadlineSeconds 3600: si el clúster estaba apagado a la hora
+#   programada, la ejecución perdida solo se recupera dentro de esa hora.
+#   Perderla del todo NO es problema: el backfill idempotente del ingestor
+#   se pone al día solo en la siguiente ejecución (diseño del brief).
+# - restartPolicy Never + backoffLimit 2: ante fallo, hasta 2 pods nuevos
+#   (logs separados, más fáciles de leer que restarts in-place).
+# - runAsNonRoot: la imagen ya corre como uid 1000; aquí se EXIGE.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ingest-prices
+  labels:
+    app.kubernetes.io/part-of: k8s-market-sentinel
+spec:
+  schedule: "5 23 * * 1-5" # L-V 23:05, tras el cierre USA (22:00 CET)
+  timeZone: "Europe/Madrid"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 900 # ningún backfill diario debería pasar de 15 min
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/part-of: k8s-market-sentinel
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+          containers:
+            - name: ingest-prices
+              image: sentinel:dev # en k3d se importa; el k3s del Ubuntu necesitará GHCR
+              imagePullPolicy: IfNotPresent
+              args: ["ingest-prices"] # la "cara" del CLI que ejecuta este job
+              envFrom:
+                - secretRef:
+                    name: sentinel-env # DATABASE_URL, FRED_API_KEY... (generado desde .env)
+              env:
+                - name: TICKERS_FILE # el código lee el universo del ConfigMap montado
+                  value: /config/tickers.yaml
+              volumeMounts:
+                - name: tickers
+                  mountPath: /config
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  memory: 512Mi # pandas tiene apetito; sin límite de CPU (throttling inútil en batch)
+          volumes:
+            - name: tickers
+              configMap:
+                name: sentinel-tickers # generado desde config/tickers.yaml (una sola fuente de verdad)

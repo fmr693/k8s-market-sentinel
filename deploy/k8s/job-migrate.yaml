@@ -1,0 +1,41 @@
+# Job de migración de esquema — se lanza A MANO cuando hay migraciones nuevas:
+#
+#   kubectl -n sentinel create -f deploy/k8s/job-migrate.yaml
+#
+# `create` y no `apply`: usa generateName (sentinel-migrate-xxxxx), así cada
+# lanzamiento es un Job nuevo y el historial de migraciones queda en pods
+# consultables. Un Job completado es inmutable — no se puede re-aplicar.
+# No forma parte de la kustomization por eso mismo: no es estado deseado
+# permanente, es una acción puntual.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: sentinel-migrate-
+  namespace: sentinel
+  labels:
+    app.kubernetes.io/part-of: k8s-market-sentinel
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: k8s-market-sentinel
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: migrate
+          image: sentinel:dev
+          imagePullPolicy: IfNotPresent
+          args: ["migrate"]
+          envFrom:
+            - secretRef:
+                name: sentinel-env
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
