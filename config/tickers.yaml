@@ -29,11 +29,11 @@ benchmarks: # Índices / FX / oro de referencia (sintaxis de Yahoo Finance)
   - ^VIX
   - GLD
   - EURUSD=X
+  - ^W5000 # Wilshire 5000: numerador del Buffett (WILL5000PR murió en FRED; decisión 2026-07-06)
 
 fred_series: # Series macro de FRED (ingestor propio, no yfinance)
   - BAMLH0A0HYM2 # ICE BofA US High Yield OAS (diferencial de crédito HY)
   - DGS10 # Treasury a 10 años
-  - WILL5000PR # Wilshire 5000 (numerador del indicador Buffett)
   - GDP # PIB nominal trimestral (denominador del Buffett)
 
 defaults:
@@ -43,3 +43,6 @@ defaults:
   # Días que re-pedimos por detrás del último dato al reanudar (over-fetch):
   # corrige la última vela si se guardó parcial y absorbe revisiones de Yahoo.
   overlap_days: 5
+  # Solape para series FRED: mayor que el de precios porque FRED revisa
+  # hacia atrás (el PIB se revisa meses después de publicarse).
+  macro_overlap_days: 30
