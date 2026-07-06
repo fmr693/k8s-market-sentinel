@@ -37,7 +37,10 @@ RUN --mount=type=cache,target=/root/.cache/pip pip install -e .
 # encuentre un usuario sin privilegios (y K8s podrá exigirlo vía
 # securityContext.runAsNonRoot).
 RUN useradd --create-home --uid 1000 sentinel
-USER sentinel
+# USER NUMÉRICO a propósito: el kubelet no lee /etc/passwd de la imagen, así
+# que con `USER sentinel` un pod con runAsNonRoot falla con
+# "non-numeric user, cannot verify user is non-root" (aprendido en fase 3).
+USER 1000
 
 # ENTRYPOINT fijo + CMD variable: `docker run imagen ingest-fx` ejecuta
 # `sentinel ingest-fx`; sin argumentos, muestra la ayuda.
