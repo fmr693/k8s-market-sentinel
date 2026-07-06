@@ -16,8 +16,21 @@ import sys
 
 from . import db
 from .config import load_universe
+from .ingest.macro import ingest_macro_series
 from .ingest.prices import ingest_daily_prices
 from .migrations import apply_migrations
+
+
+def _print_ingest_summary(result: dict[str, int], unit: str) -> int:
+    """Resumen común de ingesta + exit code (≠0 si algo falló, para los Jobs de K8s)."""
+    errors = [k for k, n in result.items() if n < 0]
+    ok = {k: n for k, n in result.items() if n >= 0}
+    print(f"Ingesta terminada: {len(ok)} OK, {len(errors)} con error.")
+    for key, n in ok.items():
+        print(f"  {key:14s} {n:6d} {unit}")
+    if errors:
+        print("  ERRORES:", ", ".join(errors))
+    return 1 if errors else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -41,6 +54,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Subconjunto de tickers (por defecto, todo el universo de config)",
     )
 
+    p_macro = sub.add_parser(
+        "ingest-macro",
+        help="Backfill idempotente de series macro (FRED) de la config",
+    )
+    p_macro.add_argument(
+        "--series",
+        nargs="*",
+        help="Subconjunto de series FRED (por defecto, todas las de config)",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "migrate":
@@ -56,16 +79,13 @@ def main(argv: list[str] | None = None) -> int:
         universe = load_universe()
         with db.connect() as conn:
             result = ingest_daily_prices(conn, universe, args.tickers)
-        errors = [t for t, n in result.items() if n < 0]
-        ok = {t: n for t, n in result.items() if n >= 0}
-        print(f"Ingesta terminada: {len(ok)} tickers OK, {len(errors)} con error.")
-        for ticker, n in ok.items():
-            print(f"  {ticker:10s} {n:6d} velas")
-        if errors:
-            print("  ERRORES:", ", ".join(errors))
-        # Exit code != 0 si algo falló: los Jobs de K8s y las alertas de
-        # observabilidad se enteran por aquí, no leyendo logs.
-        return 1 if errors else 0
+        return _print_ingest_summary(result, "velas")
+
+    if args.command == "ingest-macro":
+        universe = load_universe()
+        with db.connect() as conn:
+            result = ingest_macro_series(conn, universe, args.series)
+        return _print_ingest_summary(result, "observaciones")
 
     return 2  # unreachable con required=True
 

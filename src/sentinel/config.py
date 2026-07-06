@@ -33,6 +33,16 @@ def get_database_url() -> str:
     return url
 
 
+def get_fred_api_key() -> str:
+    key = os.environ.get("FRED_API_KEY")
+    if not key:
+        raise RuntimeError(
+            "FRED_API_KEY no está definida. Key gratuita en "
+            "https://fredaccount.stlouisfed.org/apikeys"
+        )
+    return key
+
+
 @dataclass(frozen=True)
 class Universe:
     """El universo de series a vigilar, cargado de config/tickers.yaml (o del ConfigMap)."""
@@ -43,6 +53,7 @@ class Universe:
     fred_series: list[str]
     price_history_start: dt.date
     overlap_days: int
+    macro_overlap_days: int
 
     @property
     def price_tickers(self) -> list[str]:
@@ -63,4 +74,5 @@ def load_universe(path: Path | None = None) -> Universe:
         fred_series=raw["fred_series"],
         price_history_start=dt.date.fromisoformat(defaults["price_history_start"]),
         overlap_days=int(defaults["overlap_days"]),
+        macro_overlap_days=int(defaults["macro_overlap_days"]),
     )
