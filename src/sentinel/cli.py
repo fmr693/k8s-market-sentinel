@@ -16,6 +16,7 @@ import sys
 
 from . import db
 from .config import load_universe
+from .ingest.fx import ingest_fx_rates
 from .ingest.macro import ingest_macro_series
 from .ingest.prices import ingest_daily_prices
 from .migrations import apply_migrations
@@ -64,6 +65,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Subconjunto de series FRED (por defecto, todas las de config)",
     )
 
+    p_fx = sub.add_parser(
+        "ingest-fx",
+        help="Backfill idempotente de fixings oficiales del BCE (frankfurter.app)",
+    )
+    p_fx.add_argument(
+        "--pairs",
+        nargs="*",
+        help='Subconjunto de pares "EUR/USD" (por defecto, todos los de config)',
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "migrate":
@@ -86,6 +97,12 @@ def main(argv: list[str] | None = None) -> int:
         with db.connect() as conn:
             result = ingest_macro_series(conn, universe, args.series)
         return _print_ingest_summary(result, "observaciones")
+
+    if args.command == "ingest-fx":
+        universe = load_universe()
+        with db.connect() as conn:
+            result = ingest_fx_rates(conn, universe, args.pairs)
+        return _print_ingest_summary(result, "fixings")
 
     return 2  # unreachable con required=True
 

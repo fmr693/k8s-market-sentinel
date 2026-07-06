@@ -36,6 +36,11 @@ fred_series: # Series macro de FRED (ingestor propio, no yfinance)
   - DGS10 # Treasury a 10 años
   - GDP # PIB nominal trimestral (denominador del Buffett)
 
+fx_pairs: # Tipos oficiales del BCE vía frankfurter.app (publicados ~16:00 CET, definitivos)
+  # El EURUSD=X de yfinance es la cotización de mercado intradía; ESTE es el
+  # fixing oficial diario — la banda 1,10–1,20 de las alertas se evalúa contra él.
+  - EUR/USD
+
 defaults:
   # Si un ticker no tiene datos aún, el backfill arranca aquí.
   # ~10 años: suficiente para z-scores a 1 año con contexto de ciclo completo.

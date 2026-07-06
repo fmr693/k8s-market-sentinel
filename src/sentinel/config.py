@@ -51,6 +51,7 @@ class Universe:
     cef_contrast: list[str]
     benchmarks: list[str]
     fred_series: list[str]
+    fx_pairs: list[str]  # formato "EUR/USD"
     price_history_start: dt.date
     overlap_days: int
     macro_overlap_days: int
@@ -72,6 +73,7 @@ def load_universe(path: Path | None = None) -> Universe:
         cef_contrast=raw["cef_contrast"],
         benchmarks=raw["benchmarks"],
         fred_series=raw["fred_series"],
+        fx_pairs=raw["fx_pairs"],
         price_history_start=dt.date.fromisoformat(defaults["price_history_start"]),
         overlap_days=int(defaults["overlap_days"]),
         macro_overlap_days=int(defaults["macro_overlap_days"]),
