@@ -1,0 +1,28 @@
+# Lo que NUNCA debe entrar en el contexto de build (y menos en la imagen):
+
+# Secretos — la imagen se publicará en GHCR; un .env horneado = credenciales públicas
+.env
+*.env.local
+
+# Entornos y cachés locales
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Git y metadatos (el contexto se encoge y el build se acelera)
+.git/
+.gitattributes
+.gitignore
+
+# Los tests corren en CI, no dentro de la imagen de producción
+tests/
+
+# Documentación y tooling de desarrollo
+*.md
+docker-compose.dev.yml
+.dockerignore
