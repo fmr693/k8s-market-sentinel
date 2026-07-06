@@ -6,8 +6,8 @@
 ## Estado general
 
 - ✅ **Fase de decisiones cerrada** — 7/7 dudas resueltas (la #7 marcada como provisional).
-- 🔶 **Fase 1 en curso** (2026-07-06): esquema medallón desplegado en **Neon** (proyecto creado ✓); ingestor de precios (universo completo: 60.780 velas) e ingestor FRED (3.707 observaciones) funcionando y validados en la nube con idempotencia comprobada. Semáforos ya consultables: HY OAS y Buffett operativos en gold.
-- ➡️ **Siguiente:** resto de fase 1 — ingestor FX (BCE/frankfurter) y spike de CEFConnect para el NAV.
+- ✅ **Fase 1 completada** (2026-07-06): esquema medallón en **Neon** + 4 ingestores validados en la nube con idempotencia comprobada — precios yfinance (60.780 velas), FRED (3.707 obs.), FX BCE (2.946 fixings) y **NAV CEFConnect** (4.646 NAVs diarios, 19/19 CEFs). La capa gold produce **descuentos y z-scores reales** que coinciden al céntimo con los publicados por CEFConnect (validación externa por camino independiente).
+- ➡️ **Siguiente:** Fase 2 — contenerización (Dockerfile único multi-cara, .env.example, secrets fuera del repo).
 
 ## Decisiones (resuelven las 7 dudas abiertas del brief)
 
@@ -34,13 +34,15 @@ Tomadas al implementar la fundación; todas con puerta de escape documentada:
 9. **Tests**: lógica pura (ventana de backfill, parseo) con unit tests; el upsert idempotente se valida contra Postgres real (docker-compose.dev.yml), no con mocks.
 10. **Numerador del Buffett → `^W5000` vía yfinance** (decisión de Michael, 2026-07-06). WILL5000PR fue **eliminada de FRED** (Wilshire dejó de publicar allí en 2023; la API devuelve 400). Alternativas evaluadas: ^W5000 diario (proxy del market cap, reutiliza el ingestor de precios) vs serie Z.1 trimestral oficial (BOGZ1LM893064105Q, ~2,5 meses de retraso). Se eligió frescura diaria; la vista gold lee de `silver.prices_daily` (migración 0004).
 11. **Ingestor FRED**: mismo patrón que precios con solape de **30 días** (FRED revisa hacia atrás — comprobado en vivo: el segundo run recogió una revisión del PIB de Q4-2025). Los huecos `value="."` se omiten. `urllib` de la stdlib, sin dependencia nueva.
+12. **FX BCE → `api.frankfurter.dev/v1`** (el dominio `.app` migró: hace 301 y urllib acababa en 403). Serie `EURUSD_ECB` en `silver.macro_series`: es el **fixing oficial** (~16:00 CET, definitivo) contra el que se evalúa la banda 1,10–1,20; el `EURUSD=X` de yfinance es cotización de mercado, otra cosa. Lección reutilizable: mandar **User-Agent propio** — los CDN bloquean el de Python por defecto.
+13. **NAV → CEFConnect `api/v3/pricinghistory/{ticker}/1Y` (spike #3 RESUELTO).** Hallazgos: el periodo `1Y` es el único con datos **diarios** (~245 puntos); 1M/3M/5Y vienen muestreados para gráficos. Acepta nuestro UA honesto. El payload trae `NAVTicker` (`XWDIX`...) para el cross-check con yfinance — verificado que funciona. Divergencia del patrón: la API va por periodos, no rangos → siempre se pide 1Y y se upsertea todo (backfill máximo = 1 año; huecos anteriores tolerados, como preveía el brief). Solo se guarda `NAVData`: el descuento es métrica NUESTRA (gold), el suyo se descarta — y aún así ambos coinciden al céntimo (validación externa).
 
 ## Roadmap (fases del brief) con estado
 
 | Fase | Descripción | Estado |
 |---|---|---|
 | 0 | Decisiones de arquitectura (7 dudas abiertas) | ✅ Hecho |
-| 1 | Fundación: esquema bronze/silver/gold + primer ingestor (yfinance, backfill idempotente), validar fuentes | 🔶 En curso — hecho: esquema + ingestor precios validado; falta: FRED, FX, spike NAV |
+| 1 | Fundación: esquema bronze/silver/gold + 4 ingestores (precios, FRED, FX, NAV) con backfill idempotente, fuentes validadas | ✅ Hecho (2026-07-06) |
 | 2 | Contenerización: Dockerfile, `.env.example`, secrets fuera del repo | ⬜ |
 | 3 | k3s en Ubuntu: namespace, Secrets, ConfigMap de tickers, CronJobs del carril lento | ⬜ |
 | 4 | Poller intradía: Deployment con lógica de horario de mercado + festivos USA | ⬜ |
@@ -51,8 +53,9 @@ Tomadas al implementar la fundación; todas con puerta de escape documentada:
 ## Pendientes / a revisar más adelante
 
 - **Secretos (#7):** revisar la arquitectura en detalle al llegar a la fase GitOps.
-- **Spike CEFConnect (#3):** validar endpoint/cobertura/estabilidad antes de fijar la fuente de NAV al 100%.
+- **Cross-check NAV automatizado (fase de calidad/alertas):** comparar el NAV de CEFConnect con el ticker `X...X` de yfinance y degradar `quality` a `estimado` si divergen más de una tolerancia. Evidencia que lo justifica (2026-07-06): el **último** punto de CEFConnect para FSCO (7,14 el 7/02) difiere un 2,4% de XFSCX (6,97) mientras los días anteriores coinciden al céntimo → el punto más reciente puede ser preliminar. Ojo: el `NAVTicker` de ECAT es `ECAT` a secas (rareza de la API).
 - **BAMLH0A0HYM2 limitada a ~3 años vía API** (restricción de licencia ICE, verificada en el payload de bronze: se pidió desde 2015 y FRED devolvió desde 2023-07-04). Suficiente de sobra para el z-score a 1 año; documentar en el README como limitación conocida.
+- **Backfill de NAV limitado a 1 año** (la API de CEFConnect no da más histórico diario): los descuentos anteriores a 2025-07 no existirán — hueco documentado, no reparable (previsto en el brief).
 - **Festivos USA (Fase 4):** decidir librería del calendario de mercado (¿`exchange_calendars`?) — sigue abierta en el brief.
 
 ---
