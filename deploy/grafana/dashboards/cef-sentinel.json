@@ -405,15 +405,15 @@
     {
       "id": 9,
       "type": "table",
-      "title": "Market watchlist (benchmarks + stocks - no NAV, price only)",
-      "description": "Everything in the universe that is not a CEF: indexes, gold, FX and the stocks watchlist. Here green = up on the day (standard market semantics, unlike the discount table).",
-      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 36 },
+      "title": "Stocks & ETFs watchlist",
+      "description": "Equities and ETFs from the watchlist - real USD prices. Green = up on the day (standard market semantics, unlike the discount table).",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 36 },
       "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
       "targets": [
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "WITH r AS (SELECT ticker, trading_date, close, lag(close) OVER (PARTITION BY ticker ORDER BY trading_date) AS prev, row_number() OVER (PARTITION BY ticker ORDER BY trading_date DESC) AS rn FROM silver.prices_daily WHERE ticker NOT IN (SELECT DISTINCT ticker FROM silver.navs)) SELECT ticker AS \"Asset\", trading_date AS \"Date\", close AS \"Last\", round((close / prev - 1) * 100, 2) AS \"Day %\" FROM r WHERE rn = 1 ORDER BY ticker"
+          "rawSql": "WITH r AS (SELECT ticker, trading_date, close, lag(close) OVER (PARTITION BY ticker ORDER BY trading_date) AS prev, row_number() OVER (PARTITION BY ticker ORDER BY trading_date DESC) AS rn FROM silver.prices_daily WHERE ticker NOT IN (SELECT DISTINCT ticker FROM silver.navs) AND ticker NOT LIKE '^%' AND ticker NOT LIKE '%=X') SELECT ticker AS \"Asset\", trading_date AS \"Date\", close AS \"Last price\", round((close / prev - 1) * 100, 2) AS \"Day %\" FROM r WHERE rn = 1 ORDER BY ticker"
         }
       ],
       "options": { "sortBy": [] },
@@ -431,11 +431,7 @@
                   {
                     "type": "value",
                     "options": {
-                      "^GSPC": { "text": "S&P 500 (^GSPC)", "index": 0 },
-                      "^VIX": { "text": "VIX volatility index (^VIX)", "index": 1 },
                       "GLD": { "text": "SPDR Gold Shares (GLD)", "index": 2 },
-                      "EURUSD=X": { "text": "EUR/USD market rate (EURUSD=X)", "index": 3 },
-                      "^W5000": { "text": "Wilshire 5000 (^W5000)", "index": 4 },
                       "NVDA": { "text": "NVIDIA (NVDA)", "index": 5 },
                       "GOOGL": { "text": "Alphabet (GOOGL)", "index": 6 },
                       "AAPL": { "text": "Apple (AAPL)", "index": 7 },
@@ -460,6 +456,71 @@
                   }
                 ]
               }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Last price" },
+            "properties": [
+              { "id": "unit", "value": "currencyUSD" },
+              { "id": "decimals", "value": 2 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Day %" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "continuous-RdYlGr" } },
+              { "id": "min", "value": -3 },
+              { "id": "max", "value": 3 },
+              { "id": "unit", "value": "percent" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Indexes & FX",
+      "description": "Index levels are POINTS and EUR/USD is a rate - deliberately no currency symbol here (a $ on the VIX would be a lie).",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 36 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "WITH r AS (SELECT ticker, trading_date, close, lag(close) OVER (PARTITION BY ticker ORDER BY trading_date) AS prev, row_number() OVER (PARTITION BY ticker ORDER BY trading_date DESC) AS rn FROM silver.prices_daily WHERE ticker LIKE '^%' OR ticker LIKE '%=X') SELECT ticker AS \"Index / pair\", trading_date AS \"Date\", close AS \"Last level\", round((close / prev - 1) * 100, 2) AS \"Day %\" FROM r WHERE rn = 1 ORDER BY ticker"
+        }
+      ],
+      "options": { "sortBy": [] },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "cellOptions": { "type": "auto" } }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Index / pair" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "^GSPC": { "text": "S&P 500 (^GSPC)", "index": 0 },
+                      "^VIX": { "text": "VIX volatility index (^VIX)", "index": 1 },
+                      "^W5000": { "text": "Wilshire 5000 (^W5000)", "index": 2 },
+                      "EURUSD=X": { "text": "EUR/USD market rate (EURUSD=X)", "index": 3 }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Last level" },
+            "properties": [
+              { "id": "decimals", "value": 2 }
             ]
           },
           {
