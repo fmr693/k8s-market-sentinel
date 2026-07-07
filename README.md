@@ -1,6 +1,6 @@
 # k8s-market-sentinel
 
-Plataforma **Kubernetes-nativa** de vigilancia de CEFs (closed-end funds) de crédito de EE. UU.: ingesta el precio, el NAV y las señales macro, calcula **descuentos sobre NAV y sus z-scores** en una capa gold de Postgres, y (en fases próximas) avisará por Telegram cuando aparezcan descuentos anormalmente anchos.
+Plataforma **Kubernetes-nativa** de vigilancia de CEFs (closed-end funds) de crédito de EE. UU.: ingesta el precio (diario e intradía), el NAV, las distribuciones y las señales macro, calcula **descuentos sobre NAV, sus z-scores y el yield de distribución** en una capa gold de Postgres, lo visualiza en **dashboards de Grafana aprovisionados como código**, y (en fases próximas) avisará por Telegram cuando aparezcan descuentos anormalmente anchos o recortes de distribución.
 
 > ## ⚠️ Disclaimer
 >
@@ -9,12 +9,15 @@ Plataforma **Kubernetes-nativa** de vigilancia de CEFs (closed-end funds) de cr�
 ## Qué hace
 
 - **Ingesta con backfill idempotente** (el sistema se autorrepara tras apagones: pregunta "¿cuál es mi último dato?" y pide desde ahí):
-  - Velas diarias de ~24 tickers vía yfinance (CEFs + benchmarks).
+  - Velas diarias de ~44 tickers vía yfinance (CEFs, benchmarks y watchlist de acciones USA/Europa).
   - NAV diario por CEF desde CEFConnect (la pieza frágil, aislada en su propio job).
+  - Distribuciones de los CEFs (el yield ES la tesis en un CEF de crédito; su recorte, la alerta que importa).
   - Series macro de FRED: diferencial high-yield, Treasury 10Y, PIB.
   - Fixing oficial EUR/USD del BCE (frankfurter).
-- **Medallón sobre Postgres** (Neon, gestionado): `bronze` (crudo jsonb, append-only) → `silver` (tipado, deduplicado por clave natural) → `gold` (vistas: descuento, z-score 252 sesiones, indicador Buffett).
-- **Kubernetes**: imagen única multi-comando (`sentinel migrate|ingest-prices|ingest-nav|ingest-macro|ingest-fx`), CronJobs del carril lento con `timeZone: Europe/Madrid`, ConfigMap del universo de tickers y Secret generados con kustomize.
+- **Poller intradía**: Deployment crash-only con calendario real de la NYSE (festivos, medias sesiones, DST transatlántico vía `exchange_calendars`), velas 1m en batch, sueño interrumpible y salida limpia con SIGTERM.
+- **Medallón sobre Postgres** (Neon, gestionado): `bronze` (crudo jsonb, append-only) → `silver` (tipado, deduplicado por clave natural) → `gold` (vistas: descuento con signo, z-score 252 sesiones, descuento intradía ESTIMADO, yield TTM sobre precio y sobre NAV, indicador Buffett).
+- **Grafana aprovisionado como código**: dashboards JSON y datasource en el repo, pod sin estado (ConfigMaps generados por kustomize), rol de Postgres **solo lectura** (`grafana_ro`, mínimo privilegio).
+- **Kubernetes**: imagen única multi-comando (`sentinel migrate|ingest-prices|ingest-nav|ingest-macro|ingest-fx|ingest-distributions|poller`), 5 CronJobs del carril lento con `timeZone: Europe/Madrid`, Deployment del poller con liveness por fichero-latido, ConfigMap del universo de tickers y Secret generados con kustomize.
 
 ## Estado (fases)
 
@@ -24,8 +27,9 @@ Plataforma **Kubernetes-nativa** de vigilancia de CEFs (closed-end funds) de cr�
 | 1 | Esquema medallón + 4 ingestores validados contra Neon | ✅ |
 | 2 | Contenerización (imagen única, non-root) | ✅ |
 | 3 | K8s: namespace, Secret, ConfigMap, CronJobs (validado en k3d) | ✅ |
-| 4 | Poller intradía (Deployment con horario de mercado) | ⬜ |
-| 5 | Capa gold completa + dashboards Grafana provisionados | ⬜ |
+| 4 | Poller intradía (Deployment con horario de mercado) | ✅ |
+| 5 | Capa gold completa + dashboards Grafana provisionados | ✅ |
+| 5½ | Distribuciones + yield TTM (tabla, vista, CronJob y panel) | ✅ |
 | 6 | Alertas Telegram con reglas declarativas | ⬜ |
 | 7 | Helm, Prometheus, CI a GHCR, ArgoCD | ⬜ |
 
@@ -49,13 +53,16 @@ pip install -e ".[dev]"
 sentinel migrate              # aplica las migraciones SQL
 sentinel ingest-prices        # backfill del universo completo
 sentinel ingest-macro && sentinel ingest-fx && sentinel ingest-nav
+sentinel ingest-distributions # distribuciones de los CEFs (yield)
+sentinel poller               # (opcional) intradía en vivo, Ctrl+C para salir
 pytest                        # tests de la lógica pura
 
 # 4. Kubernetes local (k3d) — requiere cgroup v2 (ver DECISIONS.md #19)
 docker build -t sentinel:dev .
 k3d cluster create sentinel && k3d image import sentinel:dev -c sentinel
-kubectl apply -k .            # namespace + ConfigMap + Secret + CronJobs
+kubectl apply -k .            # namespace + ConfigMap + Secret + CronJobs + poller + Grafana
 kubectl -n sentinel create -f deploy/k8s/job-migrate.yaml
+# Grafana: kubectl -n sentinel port-forward svc/grafana 3000:3000 → http://localhost:3000
 ```
 
 ## Licencia
