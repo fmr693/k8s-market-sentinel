@@ -23,6 +23,7 @@ resources:
   - deploy/k8s/cronjob-nav.yaml
   - deploy/k8s/cronjob-fx.yaml
   - deploy/k8s/cronjob-macro.yaml
+  - deploy/k8s/deployment-poller.yaml
 
 # Transformador de imagen: los manifests de deploy/k8s/ referencian el nombre
 # neutro `sentinel:dev` (el que usa el flujo local con `k3d image import`);
@@ -31,7 +32,7 @@ resources:
 images:
   - name: sentinel
     newName: ghcr.io/fmr693/k8s-market-sentinel
-    newTag: "0.1.0"
+    newTag: "0.2.0"
 
 configMapGenerator:
   - name: sentinel-tickers

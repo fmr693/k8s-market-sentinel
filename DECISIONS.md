@@ -46,6 +46,14 @@ Tomadas al implementar la fundación; todas con puerta de escape documentada:
 18. *(Fase 3)* **CronJobs con `timeZone: "Europe/Madrid"`** (los horarios viven en mi zona, DST incluido), `concurrencyPolicy: Forbid`, `startingDeadlineSeconds: 3600` — una ejecución perdida por tener la máquina apagada NO se recupera: el backfill idempotente se pone al día en la siguiente (el diseño del brief hecho spec de K8s). Migraciones = Job puntual con `generateName` (se lanza con `kubectl create`, no forma parte del estado deseado).
 19. *(Fase 3)* **Dos lecciones de infra aprendidas en vivo:** (a) el kubelet de K8s ≥1.35 **se niega a arrancar sobre cgroup v1** — la VM de WSL2 lo usa por defecto; arreglo: `C:\Users\Felipe\.wslconfig` con `kernelCommandLine = cgroup_no_v1=all` + `wsl --shutdown` (el Ubuntu del servidor no lo necesitará). (b) Con `runAsNonRoot: true`, el `USER` de la imagen debe ser **numérico** (`USER 1000`): el kubelet no lee `/etc/passwd` de la imagen y con un nombre falla con `CreateContainerConfigError`.
 
+## Decisiones técnicas de Fase 4 — poller intradía (2026-07-07)
+
+20. **Calendario de mercado → `exchange_calendars` (XNYS)**, envuelta en `market_hours.py` (el resto del código nunca importa la librería: puerta de escape). Resuelve las tres trampas que hacen inviable el "if 15:30-22:00 CET": DST transatlántico (~3 semanas/año el desfase NY-Madrid es 5h, no 6h — el horario real es 9:30-16:00 America/New_York), festivos con reglas móviles/traslados, y medias sesiones (cierre 13:00 NY). Los tests cubren exactamente esas tres trampas. Las alertas (fase 6) reutilizarán esta interfaz.
+21. **Anatomía crash-only del bucle** (`poller.py`): gap-fill al arrancar hace que morir sea barato (el camino de recuperación ES el arranque normal); sueño interrumpible con `threading.Event` + SIGTERM (nunca `time.sleep`: la señal despierta al instante y muere limpio dentro de la gracia de K8s); siestas de ≤15 min con latido cuando cierra el mercado; tick agendado por reloj de pared (sin deriva). Errores por tick → log y siguiente; **30 fallos seguidos → crash a conciencia** (mejor reinicio que zombi). El gap-fill fallido NO crashea: reintentar en bucle de reinicios amplificaría un 429 (cada reinicio = otra petición 7d).
+22. **Ingesta intradía = velas 1m en UNA petición batch** (`ingest/intraday.py`, decisión 4.3): rate-limit ×24 mejor que pedir por ticker; timestamps DEL MERCADO (la PK (ticker, ts) deduplica de verdad tras reinicios); tick normal y gap-fill son la misma función con distinta ventana ("1d" vs "7d" — el máximo 1m de yfinance; huecos más viejos, irreparables y asumidos). **Bronze solo en el gap-fill**, desviación consciente: guardar 24 DataFrames casi idénticos cada minuto inflaría el free tier repitiendo el 99%.
+23. **Conexión a BD POR TICK, no persistente**: Neon autosuspende con la inactividad — una conexión abierta el fin de semana (65h) estaría muerta el lunes. Un handshake cada ~75s no cuesta nada y deja a Neon dormir fuera de horario (amable con el free tier). Cadencia config-driven: `defaults.poll_interval_seconds: 75` en tickers.yaml.
+24. **Deployment con `replicas: 1` y `strategy: Recreate`** (rolling = dos pollers unos segundos; preferible un hueco que cubre el gap-fill). **Liveness por fichero-latido + exec probe** (`find /tmp/heartbeat -newermt "-20 minutes"`; 15 de siesta máxima + margen): si el bucle se cuelga sin morir, el fichero envejece y K8s reinicia — el zombi se cura solo. **Sin readinessProbe a conciencia** (el poller no recibe tráfico; ponerla sería cargo cult). Escape futuro: cuando Prometheus (fase 7) pida `/metrics`, la probe podrá migrar a HTTP.
+
 ## Roadmap (fases del brief) con estado
 
 | Fase | Descripción | Estado |
@@ -54,7 +62,7 @@ Tomadas al implementar la fundación; todas con puerta de escape documentada:
 | 1 | Fundación: esquema bronze/silver/gold + 4 ingestores (precios, FRED, FX, NAV) con backfill idempotente, fuentes validadas | ✅ Hecho (2026-07-06) |
 | 2 | Contenerización: Dockerfile, `.env.example`, secrets fuera del repo | ✅ Hecho (2026-07-06) |
 | 3 | k3s en Ubuntu: namespace, Secrets, ConfigMap de tickers, CronJobs del carril lento | ✅ Validado en k3d local (2026-07-07); Ubuntu pendiente de GHCR |
-| 4 | Poller intradía: Deployment con lógica de horario de mercado + festivos USA | ⬜ |
+| 4 | Poller intradía: Deployment con lógica de horario de mercado + festivos USA | 🔶 Código+manifest+tests hechos (2026-07-07); falta publicar imagen 0.2.0 y validar en clúster |
 | 5 | Capa gold + Grafana: queries de descuento/z-score/Buffett, dashboards provisionados | ⬜ |
 | 6 | Alertas Telegram con reglas declarativas en ConfigMap | ⬜ |
 | 7 | Pulido pro: Helm completo, Prometheus, ArgoCD, CI en GitHub Actions, README con diagrama | ⬜ |

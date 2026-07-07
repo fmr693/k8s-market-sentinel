@@ -1,0 +1,73 @@
+# El poller intradía: el primer DEPLOYMENT del proyecto (fase 4) — un proceso
+# que K8s mantiene vivo siempre, frente a los CronJobs que nacen y mueren.
+# La lógica de "cuándo trabajar" NO vive aquí: el proceso decide solo con el
+# calendario XNYS (market_hours.py); K8s solo garantiza que exista.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: poller
+  labels:
+    app.kubernetes.io/part-of: k8s-market-sentinel
+spec:
+  # UNA copia: dos pollers harían el mismo trabajo dos veces (inofensivo por
+  # el upsert, pero absurdo). Lo que compra el Deployment es el reinicio
+  # automático, no el escalado.
+  replicas: 1
+  # Recreate y no RollingUpdate (default): rolling levantaría el pod nuevo
+  # ANTES de matar al viejo → dos pollers unos segundos. Preferimos un hueco
+  # de segundos sin poller: lo cubre el gap-fill de arranque, gratis.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: poller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: poller
+        app.kubernetes.io/part-of: k8s-market-sentinel
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: poller
+          image: sentinel:dev # ← kustomization lo reescribe a la imagen GHCR
+          imagePullPolicy: IfNotPresent
+          args: ["poller"]
+          envFrom:
+            - secretRef:
+                name: sentinel-env
+          env:
+            - name: TICKERS_FILE
+              value: /config/tickers.yaml
+          volumeMounts:
+            - name: tickers
+              mountPath: /config
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              # Más generoso que los CronJobs: pandas+yfinance viven horas,
+              # no minutos. Si una fuga lo pasa, K8s lo mata → gap-fill.
+              memory: 768Mi
+          # Liveness por FICHERO-LATIDO (decisión 4.4): el bucle toca
+          # /tmp/heartbeat en cada vuelta — tick de mercado o siesta de ≤15
+          # min, da igual. Si el fichero envejece >20 min (15 de siesta
+          # máxima + margen), el bucle está colgado: matar y reiniciar
+          # (gap-fill mediante). El zombi se cura solo.
+          # `find` sale con 1 si el fichero no existe o no cumple el filtro.
+          livenessProbe:
+            exec:
+              command: ["find", "/tmp/heartbeat", "-newermt", "-20 minutes"]
+            initialDelaySeconds: 120 # el gap-fill de arranque puede tardar
+            periodSeconds: 120
+            failureThreshold: 3
+          # SIN readinessProbe, a conciencia: readiness decide si un Service
+          # te manda tráfico, y el poller no recibe tráfico de nadie.
+          # Ponerla sería cargo cult.
+      volumes:
+        - name: tickers
+          configMap:
+            name: sentinel-tickers
