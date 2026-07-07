@@ -69,6 +69,8 @@ Tomadas al implementar la fundación; todas con puerta de escape documentada:
 
 ## Pendientes / a revisar más adelante
 
+- **Smoke test del poller (cierra Fase 4):** desde el PC con el `.env` bueno — (a) local: `sentinel poller` con mercado abierto y ver ticks en el log (y el gap-fill de arranque al principio); (b) en k3d: `kubectl apply -k .` con la 0.2.0, comprobar que el Deployment levanta, que el latido mantiene la liveness verde y que `silver.prices_intraday` se llena. Verificar también la salida limpia con SIGTERM (`kubectl delete pod` y mirar el log de despedida).
+
 - **Secretos (#7):** revisar la arquitectura en detalle al llegar a la fase GitOps.
 - **Cross-check NAV automatizado (fase de calidad/alertas):** comparar el NAV de CEFConnect con el ticker `X...X` de yfinance y degradar `quality` a `estimado` si divergen más de una tolerancia. Evidencia que lo justifica (2026-07-06): el **último** punto de CEFConnect para FSCO (7,14 el 7/02) difiere un 2,4% de XFSCX (6,97) mientras los días anteriores coinciden al céntimo → el punto más reciente puede ser preliminar. Ojo: el `NAVTicker` de ECAT es `ECAT` a secas (rareza de la API).
 - **BAMLH0A0HYM2 limitada a ~3 años vía API** (restricción de licencia ICE, verificada en el payload de bronze: se pidió desde 2015 y FRED devolvió desde 2023-07-04). Suficiente de sobra para el z-score a 1 año; documentar en el README como limitación conocida.
