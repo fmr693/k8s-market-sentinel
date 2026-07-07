@@ -50,6 +50,7 @@ class Universe:
     cef_credit: list[str]
     cef_contrast: list[str]
     benchmarks: list[str]
+    stocks: list[str]  # acciones sueltas (sin NAV): solo precio, sin descuento
     fred_series: list[str]
     fx_pairs: list[str]  # formato "EUR/USD"
     price_history_start: dt.date
@@ -59,8 +60,8 @@ class Universe:
 
     @property
     def price_tickers(self) -> list[str]:
-        """Todo lo que se ingesta vía yfinance (CEFs + benchmarks)."""
-        return self.cef_credit + self.cef_contrast + self.benchmarks
+        """Todo lo que se ingesta vía yfinance (CEFs + benchmarks + acciones)."""
+        return self.cef_credit + self.cef_contrast + self.benchmarks + self.stocks
 
     @property
     def nav_tickers(self) -> list[str]:
@@ -78,6 +79,7 @@ def load_universe(path: Path | None = None) -> Universe:
         cef_credit=raw["cef_credit"],
         cef_contrast=raw["cef_contrast"],
         benchmarks=raw["benchmarks"],
+        stocks=raw.get("stocks", []),  # opcional: sin la clave, lista vacía
         fred_series=raw["fred_series"],
         fx_pairs=raw["fx_pairs"],
         price_history_start=dt.date.fromisoformat(defaults["price_history_start"]),

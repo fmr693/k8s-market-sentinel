@@ -31,6 +31,33 @@ benchmarks: # Índices / FX / oro de referencia (sintaxis de Yahoo Finance)
   - EURUSD=X
   - ^W5000 # Wilshire 5000: numerador del Buffett (WILL5000PR murió en FRED; decisión 2026-07-06)
 
+stocks: # Acciones sueltas a vigilar (2026-07-07). SIN NAV: solo precio/variación,
+  # nunca entran en el pipeline de descuento. Las europeas van vía su cotización
+  # USA (ADR): así viven en el calendario XNYS del poller (una acción de París
+  # cerraría a las 17:30 CET y solo se vería 2h/día) y todo queda en USD.
+  # --- 10 mayores de EE.UU. por capitalización ---
+  - NVDA
+  - GOOGL
+  - AAPL
+  - MSFT
+  - AMZN
+  - META
+  - AVGO
+  - TSLA
+  - BRK-B
+  - JPM
+  # --- 10 mayores de Europa, vía listing/ADR en USA ---
+  - ASML # ASML (NL) — NASDAQ
+  - SAP # SAP (DE) — NYSE
+  - NVO # Novo Nordisk (DK) — NYSE
+  - SHEL # Shell (UK) — NYSE
+  - AZN # AstraZeneca (UK) — NASDAQ
+  - NVS # Novartis (CH) — NYSE
+  - RHHBY # Roche (CH) — ADR OTC
+  - NSRGY # Nestlé (CH) — ADR OTC
+  - LVMUY # LVMH (FR) — ADR OTC
+  - SIEGY # Siemens (DE) — ADR OTC
+
 fred_series: # Series macro de FRED (ingestor propio, no yfinance)
   - BAMLH0A0HYM2 # ICE BofA US High Yield OAS (diferencial de crédito HY)
   - DGS10 # Treasury a 10 años
