@@ -1,3 +1,3 @@
 """k8s-market-sentinel: vigilancia de CEFs de crédito (descuento/NAV, señales macro)."""
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
