@@ -231,7 +231,7 @@
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT ticker, nav_date, nav_age_days AS \"age (days)\" FROM gold.cef_snapshot WHERE nav_quality = 'rancio' ORDER BY nav_age_days DESC"
+          "rawSql": "SELECT ticker AS \"CEF\", nav_date AS \"NAV date\", nav_age_days AS \"Age (days)\" FROM gold.cef_snapshot WHERE nav_quality = 'rancio' ORDER BY nav_age_days DESC"
         }
       ],
       "options": { "sortBy": [] },

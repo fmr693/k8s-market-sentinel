@@ -83,7 +83,8 @@ Tomadas al implementar la fundación; todas con puerta de escape documentada:
 - **Cross-check NAV automatizado (fase de calidad/alertas):** comparar el NAV de CEFConnect con el ticker `X...X` de yfinance y degradar `quality` a `estimado` si divergen más de una tolerancia. Evidencia que lo justifica (2026-07-06): el **último** punto de CEFConnect para FSCO (7,14 el 7/02) difiere un 2,4% de XFSCX (6,97) mientras los días anteriores coinciden al céntimo → el punto más reciente puede ser preliminar. Ojo: el `NAVTicker` de ECAT es `ECAT` a secas (rareza de la API).
 - **BAMLH0A0HYM2 limitada a ~3 años vía API** (restricción de licencia ICE, verificada en el payload de bronze: se pidió desde 2015 y FRED devolvió desde 2023-07-04). Suficiente de sobra para el z-score a 1 año; documentar en el README como limitación conocida.
 - **Backfill de NAV limitado a 1 año** (la API de CEFConnect no da más histórico diario): los descuentos anteriores a 2025-07 no existirán — hueco documentado, no reparable (previsto en el brief).
-- **Festivos USA (Fase 4):** decidir librería del calendario de mercado (¿`exchange_calendars`?) — sigue abierta en el brief.
+- **Panel de yield por CEF (pedido 2026-07-07):** requiere ingerir DISTRIBUCIONES (no las tenemos): tabla `silver.distributions` + ampliar ingestor (yfinance las da con actions=True) + vista gold (yield TTM = distribuciones 12m ÷ precio). Mini-fase propia; muy pertinente al dominio (se invierte por ese yield).
+- ~~Festivos USA (Fase 4)~~ → resuelta: `exchange_calendars` (decisión #20).
 - **Publicar la imagen antes de k3s en el Ubuntu (Fase 3):** el k3d local puede importarla con `k3d image import sentinel:dev`, pero el k3s del servidor necesitará un registry (GHCR manual ahora, CI en fase 7).
 - **Lock de dependencias:** la imagen instala "lo último" en cada build (hoy: pandas 3.0.3, yfinance 1.5.1 — verificado que funcionan). Para builds reproducibles, valorar `uv lock`/`pip-tools` antes del CI de fase 7.
 

@@ -172,7 +172,7 @@
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT ticker, price, nav, nav_date, nav_age_days AS \"nav age (d)\", nav_quality, round(premium_discount * 100, 2) AS \"prem/disc %\", estado AS status, round(zscore::numeric, 2) AS \"z-score\", n_obs, zscore_date FROM gold.cef_snapshot ORDER BY zscore ASC NULLS LAST"
+          "rawSql": "SELECT ticker AS \"CEF\", price AS \"Price\", nav AS \"NAV\", nav_date AS \"NAV date\", nav_age_days AS \"NAV age (d)\", nav_quality AS \"NAV quality\", round(premium_discount * 100, 2) AS \"Prem/Disc %\", estado AS \"Status\", round(zscore::numeric, 2) AS \"Z-score\", n_obs AS \"Obs (1y)\", zscore_date AS \"Z-score date\" FROM gold.cef_snapshot ORDER BY zscore ASC NULLS LAST"
         }
       ],
       "options": { "sortBy": [] },
@@ -182,7 +182,55 @@
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "prem/disc %" },
+            "matcher": { "id": "byName", "options": "CEF" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "WDI": { "text": "Western Asset Diversified Income (WDI)", "index": 0 },
+                      "KIO": { "text": "KKR Income Opportunities (KIO)", "index": 1 },
+                      "BIT": { "text": "BlackRock Multi-Sector Income (BIT)", "index": 2 },
+                      "HYT": { "text": "BlackRock Corporate High Yield (HYT)", "index": 3 },
+                      "BTZ": { "text": "BlackRock Credit Allocation Income (BTZ)", "index": 4 },
+                      "BHK": { "text": "BlackRock Core Bond (BHK)", "index": 5 },
+                      "DSL": { "text": "DoubleLine Income Solutions (DSL)", "index": 6 },
+                      "FSCO": { "text": "FS Credit Opportunities (FSCO)", "index": 7 },
+                      "BGH": { "text": "Barings Global Short Duration HY (BGH)", "index": 8 },
+                      "ARDC": { "text": "Ares Dynamic Credit Allocation (ARDC)", "index": 9 },
+                      "GHY": { "text": "PGIM Global High Yield (GHY)", "index": 10 },
+                      "OPP": { "text": "RiverNorth/DoubleLine Strat. Opp. (OPP)", "index": 11 },
+                      "PDI": { "text": "PIMCO Dynamic Income (PDI)", "index": 12 },
+                      "PDO": { "text": "PIMCO Dynamic Income Opp. (PDO)", "index": 13 },
+                      "PTY": { "text": "PIMCO Corporate & Income Opp. (PTY)", "index": 14 },
+                      "BCAT": { "text": "BlackRock Capital Allocation (BCAT)", "index": 15 },
+                      "ECAT": { "text": "BlackRock ESG Capital Allocation (ECAT)", "index": 16 },
+                      "ADX": { "text": "Adams Diversified Equity (ADX)", "index": 17 },
+                      "BST": { "text": "BlackRock Science & Technology (BST)", "index": 18 }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Price" },
+            "properties": [
+              { "id": "unit", "value": "currencyUSD" },
+              { "id": "decimals", "value": 2 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "NAV" },
+            "properties": [
+              { "id": "unit", "value": "currencyUSD" },
+              { "id": "decimals", "value": 2 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Prem/Disc %" },
             "properties": [
               { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
               { "id": "color", "value": { "mode": "continuous-GrYlRd" } },
@@ -192,7 +240,7 @@
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "z-score" },
+            "matcher": { "id": "byName", "options": "Z-score" },
             "properties": [
               { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
               { "id": "color", "value": { "mode": "continuous-GrYlRd" } },
@@ -201,7 +249,26 @@
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "nav_quality" },
+            "matcher": { "id": "byName", "options": "Status" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "prima": { "text": "Premium", "color": "red", "index": 0 },
+                      "descuento": { "text": "Discount", "color": "green", "index": 1 },
+                      "par": { "text": "Par", "color": "text", "index": 2 }
+                    }
+                  }
+                ]
+              },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "NAV quality" },
             "properties": [
               {
                 "id": "mappings",
@@ -346,7 +413,7 @@
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "WITH r AS (SELECT ticker, trading_date, close, lag(close) OVER (PARTITION BY ticker ORDER BY trading_date) AS prev, row_number() OVER (PARTITION BY ticker ORDER BY trading_date DESC) AS rn FROM silver.prices_daily WHERE ticker NOT IN (SELECT DISTINCT ticker FROM silver.navs)) SELECT ticker, trading_date AS \"last close\", close, round((close / prev - 1) * 100, 2) AS \"day %\" FROM r WHERE rn = 1 ORDER BY ticker"
+          "rawSql": "WITH r AS (SELECT ticker, trading_date, close, lag(close) OVER (PARTITION BY ticker ORDER BY trading_date) AS prev, row_number() OVER (PARTITION BY ticker ORDER BY trading_date DESC) AS rn FROM silver.prices_daily WHERE ticker NOT IN (SELECT DISTINCT ticker FROM silver.navs)) SELECT ticker AS \"Asset\", trading_date AS \"Date\", close AS \"Last\", round((close / prev - 1) * 100, 2) AS \"Day %\" FROM r WHERE rn = 1 ORDER BY ticker"
         }
       ],
       "options": { "sortBy": [] },
@@ -356,7 +423,47 @@
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "day %" },
+            "matcher": { "id": "byName", "options": "Asset" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "^GSPC": { "text": "S&P 500 (^GSPC)", "index": 0 },
+                      "^VIX": { "text": "VIX volatility index (^VIX)", "index": 1 },
+                      "GLD": { "text": "SPDR Gold Shares (GLD)", "index": 2 },
+                      "EURUSD=X": { "text": "EUR/USD market rate (EURUSD=X)", "index": 3 },
+                      "^W5000": { "text": "Wilshire 5000 (^W5000)", "index": 4 },
+                      "NVDA": { "text": "NVIDIA (NVDA)", "index": 5 },
+                      "GOOGL": { "text": "Alphabet (GOOGL)", "index": 6 },
+                      "AAPL": { "text": "Apple (AAPL)", "index": 7 },
+                      "MSFT": { "text": "Microsoft (MSFT)", "index": 8 },
+                      "AMZN": { "text": "Amazon (AMZN)", "index": 9 },
+                      "META": { "text": "Meta Platforms (META)", "index": 10 },
+                      "AVGO": { "text": "Broadcom (AVGO)", "index": 11 },
+                      "TSLA": { "text": "Tesla (TSLA)", "index": 12 },
+                      "BRK-B": { "text": "Berkshire Hathaway (BRK-B)", "index": 13 },
+                      "JPM": { "text": "JPMorgan Chase (JPM)", "index": 14 },
+                      "ASML": { "text": "ASML (ASML)", "index": 15 },
+                      "SAP": { "text": "SAP (SAP)", "index": 16 },
+                      "NVO": { "text": "Novo Nordisk (NVO)", "index": 17 },
+                      "SHEL": { "text": "Shell (SHEL)", "index": 18 },
+                      "AZN": { "text": "AstraZeneca (AZN)", "index": 19 },
+                      "NVS": { "text": "Novartis (NVS)", "index": 20 },
+                      "RHHBY": { "text": "Roche (RHHBY)", "index": 21 },
+                      "NSRGY": { "text": "Nestlé (NSRGY)", "index": 22 },
+                      "LVMUY": { "text": "LVMH (LVMUY)", "index": 23 },
+                      "SIEGY": { "text": "Siemens (SIEGY)", "index": 24 }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Day %" },
             "properties": [
               { "id": "custom.cellOptions", "value": { "type": "color-text" } },
               { "id": "color", "value": { "mode": "continuous-RdYlGr" } },
