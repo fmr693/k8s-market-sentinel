@@ -9,7 +9,8 @@
 - ✅ **Fase 1 completada** (2026-07-06): esquema medallón en **Neon** + 4 ingestores validados en la nube con idempotencia comprobada — precios yfinance (60.780 velas), FRED (3.707 obs.), FX BCE (2.946 fixings) y **NAV CEFConnect** (4.646 NAVs diarios, 19/19 CEFs). La capa gold produce **descuentos y z-scores reales** que coinciden al céntimo con los publicados por CEFConnect (validación externa por camino independiente).
 - ✅ **Fase 2 completada** (2026-07-06): imagen única `sentinel:dev` (python:3.13-slim, non-root, 481 MB) con las 5 caras del CLI; validada ejecutando `migrate` + ingestas reales contra Neon desde el contenedor.
 - ✅ **Fase 3 completada en k3d local** (2026-07-07): namespace + Secret/ConfigMap generados por kustomize + 4 CronJobs con `timeZone: Europe/Madrid`; validado end-to-end (Job de migración + CronJob disparado a mano ingiriendo contra Neon desde el clúster). **Pendiente**: replicar en el k3s del Ubuntu (requiere publicar la imagen en GHCR).
-- ➡️ **Siguiente:** Fase 4 (poller intradía) o publicar imagen + desplegar en el Ubuntu.
+- 🔶 **Cierre de Fase 3 preparado** (2026-07-07, sin acceso al servidor aún): imagen reconstruida y etiquetada `ghcr.io/fmr693/k8s-market-sentinel:0.1.0` (+`latest`), manifests apuntados a GHCR (transformador `images:` en kustomization.yaml; `job-migrate.yaml` a mano por vivir fuera), runbook completo en `deploy/DEPLOY_UBUNTU.md`. **Falta:** push a GHCR (requiere PAT `write:packages` + hacer el paquete público) y ejecutar el runbook en el servidor cuando haya acceso.
+- ➡️ **Siguiente:** push a GHCR → runbook en el Ubuntu (cierra Fase 3) → Fase 4 (poller intradía).
 
 ## Decisiones (resuelven las 7 dudas abiertas del brief)
 

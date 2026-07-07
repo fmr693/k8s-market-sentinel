@@ -27,7 +27,11 @@ spec:
         runAsNonRoot: true
       containers:
         - name: migrate
-          image: sentinel:dev
+          # Referencia directa a GHCR: este Job vive FUERA de la kustomization,
+          # así que el transformador images: no lo reescribe. Al subir newTag
+          # en kustomization.yaml, subir también esta etiqueta (a mano).
+          # (Para el flujo k3d local con imagen importada: sentinel:dev.)
+          image: ghcr.io/fmr693/k8s-market-sentinel:0.1.0
           imagePullPolicy: IfNotPresent
           args: ["migrate"]
           envFrom:
