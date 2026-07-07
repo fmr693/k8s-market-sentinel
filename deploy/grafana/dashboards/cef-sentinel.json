@@ -2,35 +2,34 @@
   "title": "CEF Sentinel",
   "uid": "cef-sentinel",
   "description": "Business dashboard: CEF premiums/discounts, z-scores and macro traffic lights. Data is informational only; intraday discounts are ESTIMATES (yesterday's NAV). Not investment advice.",
-  "tags": ["sentinel", "business"],
+  "tags": [
+    "sentinel",
+    "business"
+  ],
   "schemaVersion": 39,
   "editable": true,
   "timezone": "browser",
-  "time": { "from": "now-1y", "to": "now" },
-  "refresh": "5m",
-  "templating": {
-    "list": [
-      {
-        "name": "cef",
-        "label": "CEF",
-        "type": "query",
-        "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
-        "query": "SELECT DISTINCT ticker FROM gold.cef_snapshot ORDER BY 1",
-        "multi": true,
-        "includeAll": true,
-        "current": { "text": "All", "value": "$__all" },
-        "refresh": 1
-      }
-    ]
+  "time": {
+    "from": "now-1y",
+    "to": "now"
   },
+  "refresh": "5m",
   "panels": [
     {
       "id": 1,
       "type": "stat",
       "title": "HY credit spread (ICE BofA OAS)",
-      "description": "Widening spreads = stress = the buying window may open. Last ~3y only (ICE licence limit on FRED API).",
-      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "description": "Extra yield that high-yield ('junk') corporate bonds pay over US Treasuries. THE credit-stress thermometer: widening = fear and falling bond prices (the buying window for credit CEFs may be opening); tight = calm/complacency. Note: FRED's API only serves the last ~3 years (ICE licence limit).",
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
@@ -39,7 +38,11 @@
         }
       ],
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "graphMode": "area",
         "colorMode": "value"
       },
@@ -50,9 +53,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 4.5 },
-              { "color": "red", "value": 6 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 4.5
+              },
+              {
+                "color": "red",
+                "value": 6
+              }
             ]
           }
         },
@@ -64,8 +76,16 @@
       "type": "stat",
       "title": "EUR/USD (ECB fixing)",
       "description": "Official daily ECB fixing (~16:00 CET). Personal band: 1.10 - 1.20; outside the band = act (display reference only).",
-      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
@@ -74,7 +94,11 @@
         }
       ],
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "graphMode": "area",
         "colorMode": "value"
       },
@@ -84,9 +108,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "green", "value": 1.1 },
-              { "color": "red", "value": 1.2 }
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1.1
+              },
+              {
+                "color": "red",
+                "value": 1.2
+              }
             ]
           }
         },
@@ -98,8 +131,16 @@
       "type": "stat",
       "title": "Buffett indicator (W5000 / GDP)",
       "description": "Total US market cap proxy vs nominal GDP. What matters is the level vs its own history, not the absolute number.",
-      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
@@ -108,7 +149,11 @@
         }
       ],
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "graphMode": "area",
         "colorMode": "value"
       },
@@ -119,9 +164,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 150 },
-              { "color": "red", "value": 200 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 150
+              },
+              {
+                "color": "red",
+                "value": 200
+              }
             ]
           }
         },
@@ -132,8 +186,16 @@
       "id": 4,
       "type": "stat",
       "title": "VIX",
-      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
@@ -142,7 +204,11 @@
         }
       ],
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "graphMode": "area",
         "colorMode": "value"
       },
@@ -152,37 +218,65 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 20 },
-              { "color": "red", "value": 30 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 20
+              },
+              {
+                "color": "red",
+                "value": 30
+              }
             ]
           }
         },
         "overrides": []
-      }
+      },
+      "description": "The market's 'fear gauge': expected volatility of the S&P 500 over the next 30 days, implied by option prices. Rough guide: under ~15 = calm, 20-30 = nervous, above 30 = fear/panic - historically when bargains appear."
     },
     {
       "id": 5,
       "type": "table",
       "title": "CEF universe - now (sorted by z-score: most anomalously cheap first)",
-      "description": "One row per CEF from gold.cef_snapshot. premium/discount sign convention: negative = discount (buy zone), positive = premium. nav_quality: estimado = normal intraday state (yesterday's NAV); rancio = NAV older than 4 days, scraper likely failing. Z-scores with low n_obs are unreliable.",
-      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 5 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "description": "One row per CEF from gold.cef_snapshot. Premium/discount sign convention: negative = discount (buy zone), positive = premium. NAV quality: estimado = normal intraday state (yesterday's NAV); rancio = NAV older than 4 days, scraper likely failing. | Z-SCORE, in plain words: how unusual today's premium/discount is versus that fund's OWN last year, in standard deviations. 0 = its normal level; -2 = unusually cheap (roughly the cheapest ~2% of days); +2 = unusually expensive. Big negative z-score with enough observations (Obs 1y) = the anomaly worth investigating.",
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT ticker AS \"CEF\", price AS \"Price\", nav AS \"NAV\", nav_date AS \"NAV date\", nav_age_days AS \"NAV age (d)\", nav_quality AS \"NAV quality\", round(premium_discount * 100, 2) AS \"Prem/Disc %\", estado AS \"Status\", round(zscore::numeric, 2) AS \"Z-score\", n_obs AS \"Obs (1y)\", zscore_date AS \"Z-score date\" FROM gold.cef_snapshot ORDER BY zscore ASC NULLS LAST"
+          "rawSql": "SELECT ticker AS \"CEF\", price AS \"Price\", nav AS \"NAV\", nav_date AS \"NAV date\", nav_quality AS \"NAV quality\", round(premium_discount * 100, 2) AS \"Prem/Disc %\", estado AS \"Status\", round(zscore::numeric, 2) AS \"Z-score\", n_obs AS \"Obs (1y)\", zscore_date AS \"Z-score date\" FROM gold.cef_snapshot ORDER BY zscore ASC NULLS LAST"
         }
       ],
-      "options": { "sortBy": [] },
+      "options": {
+        "sortBy": []
+      },
       "fieldConfig": {
         "defaults": {
-          "custom": { "align": "auto", "cellOptions": { "type": "auto" } }
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "CEF" },
+            "matcher": {
+              "id": "byName",
+              "options": "CEF"
+            },
             "properties": [
               {
                 "id": "mappings",
@@ -190,25 +284,82 @@
                   {
                     "type": "value",
                     "options": {
-                      "WDI": { "text": "Western Asset Diversified Income (WDI)", "index": 0 },
-                      "KIO": { "text": "KKR Income Opportunities (KIO)", "index": 1 },
-                      "BIT": { "text": "BlackRock Multi-Sector Income (BIT)", "index": 2 },
-                      "HYT": { "text": "BlackRock Corporate High Yield (HYT)", "index": 3 },
-                      "BTZ": { "text": "BlackRock Credit Allocation Income (BTZ)", "index": 4 },
-                      "BHK": { "text": "BlackRock Core Bond (BHK)", "index": 5 },
-                      "DSL": { "text": "DoubleLine Income Solutions (DSL)", "index": 6 },
-                      "FSCO": { "text": "FS Credit Opportunities (FSCO)", "index": 7 },
-                      "BGH": { "text": "Barings Global Short Duration HY (BGH)", "index": 8 },
-                      "ARDC": { "text": "Ares Dynamic Credit Allocation (ARDC)", "index": 9 },
-                      "GHY": { "text": "PGIM Global High Yield (GHY)", "index": 10 },
-                      "OPP": { "text": "RiverNorth/DoubleLine Strat. Opp. (OPP)", "index": 11 },
-                      "PDI": { "text": "PIMCO Dynamic Income (PDI)", "index": 12 },
-                      "PDO": { "text": "PIMCO Dynamic Income Opp. (PDO)", "index": 13 },
-                      "PTY": { "text": "PIMCO Corporate & Income Opp. (PTY)", "index": 14 },
-                      "BCAT": { "text": "BlackRock Capital Allocation (BCAT)", "index": 15 },
-                      "ECAT": { "text": "BlackRock ESG Capital Allocation (ECAT)", "index": 16 },
-                      "ADX": { "text": "Adams Diversified Equity (ADX)", "index": 17 },
-                      "BST": { "text": "BlackRock Science & Technology (BST)", "index": 18 }
+                      "WDI": {
+                        "text": "Western Asset Diversified Income (WDI)",
+                        "index": 0
+                      },
+                      "KIO": {
+                        "text": "KKR Income Opportunities (KIO)",
+                        "index": 1
+                      },
+                      "BIT": {
+                        "text": "BlackRock Multi-Sector Income (BIT)",
+                        "index": 2
+                      },
+                      "HYT": {
+                        "text": "BlackRock Corporate High Yield (HYT)",
+                        "index": 3
+                      },
+                      "BTZ": {
+                        "text": "BlackRock Credit Allocation Income (BTZ)",
+                        "index": 4
+                      },
+                      "BHK": {
+                        "text": "BlackRock Core Bond (BHK)",
+                        "index": 5
+                      },
+                      "DSL": {
+                        "text": "DoubleLine Income Solutions (DSL)",
+                        "index": 6
+                      },
+                      "FSCO": {
+                        "text": "FS Credit Opportunities (FSCO)",
+                        "index": 7
+                      },
+                      "BGH": {
+                        "text": "Barings Global Short Duration HY (BGH)",
+                        "index": 8
+                      },
+                      "ARDC": {
+                        "text": "Ares Dynamic Credit Allocation (ARDC)",
+                        "index": 9
+                      },
+                      "GHY": {
+                        "text": "PGIM Global High Yield (GHY)",
+                        "index": 10
+                      },
+                      "OPP": {
+                        "text": "RiverNorth/DoubleLine Strat. Opp. (OPP)",
+                        "index": 11
+                      },
+                      "PDI": {
+                        "text": "PIMCO Dynamic Income (PDI)",
+                        "index": 12
+                      },
+                      "PDO": {
+                        "text": "PIMCO Dynamic Income Opp. (PDO)",
+                        "index": 13
+                      },
+                      "PTY": {
+                        "text": "PIMCO Corporate & Income Opp. (PTY)",
+                        "index": 14
+                      },
+                      "BCAT": {
+                        "text": "BlackRock Capital Allocation (BCAT)",
+                        "index": 15
+                      },
+                      "ECAT": {
+                        "text": "BlackRock ESG Capital Allocation (ECAT)",
+                        "index": 16
+                      },
+                      "ADX": {
+                        "text": "Adams Diversified Equity (ADX)",
+                        "index": 17
+                      },
+                      "BST": {
+                        "text": "BlackRock Science & Technology (BST)",
+                        "index": 18
+                      }
                     }
                   }
                 ]
@@ -216,40 +367,104 @@
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "Price" },
+            "matcher": {
+              "id": "byName",
+              "options": "Price"
+            },
             "properties": [
-              { "id": "unit", "value": "currencyUSD" },
-              { "id": "decimals", "value": 2 }
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "NAV" },
+            "matcher": {
+              "id": "byName",
+              "options": "NAV"
+            },
             "properties": [
-              { "id": "unit", "value": "currencyUSD" },
-              { "id": "decimals", "value": 2 }
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "Prem/Disc %" },
+            "matcher": {
+              "id": "byName",
+              "options": "Prem/Disc %"
+            },
             "properties": [
-              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
-              { "id": "color", "value": { "mode": "continuous-GrYlRd" } },
-              { "id": "min", "value": -15 },
-              { "id": "max", "value": 15 },
-              { "id": "unit", "value": "percent" }
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-GrYlRd"
+                }
+              },
+              {
+                "id": "min",
+                "value": -15
+              },
+              {
+                "id": "max",
+                "value": 15
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "Z-score" },
+            "matcher": {
+              "id": "byName",
+              "options": "Z-score"
+            },
             "properties": [
-              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
-              { "id": "color", "value": { "mode": "continuous-GrYlRd" } },
-              { "id": "min", "value": -3 },
-              { "id": "max", "value": 3 }
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-GrYlRd"
+                }
+              },
+              {
+                "id": "min",
+                "value": -3
+              },
+              {
+                "id": "max",
+                "value": 3
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "Status" },
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
             "properties": [
               {
                 "id": "mappings",
@@ -257,149 +472,66 @@
                   {
                     "type": "value",
                     "options": {
-                      "prima": { "text": "Premium", "color": "red", "index": 0 },
-                      "descuento": { "text": "Discount", "color": "green", "index": 1 },
-                      "par": { "text": "Par", "color": "text", "index": 2 }
+                      "prima": {
+                        "text": "Premium",
+                        "color": "red",
+                        "index": 0
+                      },
+                      "descuento": {
+                        "text": "Discount",
+                        "color": "green",
+                        "index": 1
+                      },
+                      "par": {
+                        "text": "Par",
+                        "color": "text",
+                        "index": 2
+                      }
                     }
                   }
                 ]
               },
-              { "id": "custom.cellOptions", "value": { "type": "color-text" } }
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "NAV quality" },
+            "matcher": {
+              "id": "byName",
+              "options": "NAV quality"
+            },
             "properties": [
               {
                 "id": "mappings",
                 "value": [
-                  { "type": "value", "options": { "estimado": { "color": "text", "index": 0 }, "rancio": { "color": "red", "index": 1 } } }
+                  {
+                    "type": "value",
+                    "options": {
+                      "estimado": {
+                        "color": "text",
+                        "index": 0
+                      },
+                      "rancio": {
+                        "color": "red",
+                        "index": 1
+                      }
+                    }
+                  }
                 ]
               },
-              { "id": "custom.cellOptions", "value": { "type": "color-text" } }
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
             ]
           }
         ]
-      }
-    },
-    {
-      "id": 6,
-      "type": "timeseries",
-      "title": "Premium/discount - daily (definitive: close vs same-day NAV)",
-      "description": "Reference lines at -5% / -7% are personal buy levels (display only; alerting rules live in the phase-6 ConfigMap). Zero line = trading at par.",
-      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 17 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
-      "targets": [
-        {
-          "refId": "A",
-          "format": "time_series",
-          "rawSql": "SELECT trading_date::timestamptz AS \"time\", ticker, discount * 100 AS \"prem/disc\" FROM gold.discount_daily WHERE ticker IN (${cef:sqlstring}) AND $__timeFilter(trading_date::timestamptz) ORDER BY 1"
-        }
-      ],
-      "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "asc" }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "pointSize": 4,
-            "showPoints": "never",
-            "thresholdsStyle": { "mode": "line" }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "transparent", "value": null },
-              { "color": "red", "value": -7 },
-              { "color": "orange", "value": -5 },
-              { "color": "#808080", "value": 0 }
-            ]
-          }
-        },
-        "overrides": []
-      }
-    },
-    {
-      "id": 7,
-      "type": "timeseries",
-      "title": "Discount z-score (252 trading sessions)",
-      "description": "How anomalous is today's premium/discount vs its own 1-year history. Very negative = anomalously cheap.",
-      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 17 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
-      "targets": [
-        {
-          "refId": "A",
-          "format": "time_series",
-          "rawSql": "SELECT trading_date::timestamptz AS \"time\", ticker, zscore FROM gold.discount_zscore WHERE ticker IN (${cef:sqlstring}) AND $__timeFilter(trading_date::timestamptz) ORDER BY 1"
-        }
-      ],
-      "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "asc" }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "showPoints": "never",
-            "thresholdsStyle": { "mode": "line" }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "transparent", "value": null },
-              { "color": "orange", "value": -2 },
-              { "color": "#808080", "value": 0 }
-            ]
-          }
-        },
-        "overrides": []
-      }
-    },
-    {
-      "id": 8,
-      "type": "timeseries",
-      "title": "Intraday premium/discount - ESTIMATED (live price vs yesterday's NAV)",
-      "description": "By construction every intraday point is an estimate: today's NAV does not exist until ~23:00 CET. Prices ~15 min delayed (yfinance).",
-      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 27 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
-      "targets": [
-        {
-          "refId": "A",
-          "format": "time_series",
-          "rawSql": "SELECT ts AS \"time\", ticker, premium_discount * 100 AS \"prem/disc\" FROM gold.discount_intraday WHERE ticker IN (${cef:sqlstring}) AND $__timeFilter(ts) ORDER BY 1"
-        }
-      ],
-      "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "asc" }
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "custom": {
-            "drawStyle": "line",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "showPoints": "never",
-            "thresholdsStyle": { "mode": "line" }
-          },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "transparent", "value": null },
-              { "color": "#808080", "value": 0 }
-            ]
-          }
-        },
-        "overrides": []
       }
     },
     {
@@ -407,8 +539,16 @@
       "type": "table",
       "title": "Stocks & ETFs watchlist",
       "description": "Equities and ETFs from the watchlist - real USD prices. Green = up on the day (standard market semantics, unlike the discount table).",
-      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 36 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
@@ -416,14 +556,24 @@
           "rawSql": "WITH r AS (SELECT ticker, trading_date, close, lag(close) OVER (PARTITION BY ticker ORDER BY trading_date) AS prev, row_number() OVER (PARTITION BY ticker ORDER BY trading_date DESC) AS rn FROM silver.prices_daily WHERE ticker NOT IN (SELECT DISTINCT ticker FROM silver.navs) AND ticker NOT LIKE '^%' AND ticker NOT LIKE '%=X') SELECT ticker AS \"Asset\", trading_date AS \"Date\", close AS \"Last price\", round((close / prev - 1) * 100, 2) AS \"Day %\" FROM r WHERE rn = 1 ORDER BY ticker"
         }
       ],
-      "options": { "sortBy": [] },
+      "options": {
+        "sortBy": []
+      },
       "fieldConfig": {
         "defaults": {
-          "custom": { "align": "auto", "cellOptions": { "type": "auto" } }
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Asset" },
+            "matcher": {
+              "id": "byName",
+              "options": "Asset"
+            },
             "properties": [
               {
                 "id": "mappings",
@@ -431,27 +581,90 @@
                   {
                     "type": "value",
                     "options": {
-                      "GLD": { "text": "SPDR Gold Shares (GLD)", "index": 2 },
-                      "NVDA": { "text": "NVIDIA (NVDA)", "index": 5 },
-                      "GOOGL": { "text": "Alphabet (GOOGL)", "index": 6 },
-                      "AAPL": { "text": "Apple (AAPL)", "index": 7 },
-                      "MSFT": { "text": "Microsoft (MSFT)", "index": 8 },
-                      "AMZN": { "text": "Amazon (AMZN)", "index": 9 },
-                      "META": { "text": "Meta Platforms (META)", "index": 10 },
-                      "AVGO": { "text": "Broadcom (AVGO)", "index": 11 },
-                      "TSLA": { "text": "Tesla (TSLA)", "index": 12 },
-                      "BRK-B": { "text": "Berkshire Hathaway (BRK-B)", "index": 13 },
-                      "JPM": { "text": "JPMorgan Chase (JPM)", "index": 14 },
-                      "ASML": { "text": "ASML (ASML)", "index": 15 },
-                      "SAP": { "text": "SAP (SAP)", "index": 16 },
-                      "NVO": { "text": "Novo Nordisk (NVO)", "index": 17 },
-                      "SHEL": { "text": "Shell (SHEL)", "index": 18 },
-                      "AZN": { "text": "AstraZeneca (AZN)", "index": 19 },
-                      "NVS": { "text": "Novartis (NVS)", "index": 20 },
-                      "RHHBY": { "text": "Roche (RHHBY)", "index": 21 },
-                      "NSRGY": { "text": "Nestlé (NSRGY)", "index": 22 },
-                      "LVMUY": { "text": "LVMH (LVMUY)", "index": 23 },
-                      "SIEGY": { "text": "Siemens (SIEGY)", "index": 24 }
+                      "GLD": {
+                        "text": "SPDR Gold Shares (GLD)",
+                        "index": 2
+                      },
+                      "NVDA": {
+                        "text": "NVIDIA (NVDA)",
+                        "index": 5
+                      },
+                      "GOOGL": {
+                        "text": "Alphabet (GOOGL)",
+                        "index": 6
+                      },
+                      "AAPL": {
+                        "text": "Apple (AAPL)",
+                        "index": 7
+                      },
+                      "MSFT": {
+                        "text": "Microsoft (MSFT)",
+                        "index": 8
+                      },
+                      "AMZN": {
+                        "text": "Amazon (AMZN)",
+                        "index": 9
+                      },
+                      "META": {
+                        "text": "Meta Platforms (META)",
+                        "index": 10
+                      },
+                      "AVGO": {
+                        "text": "Broadcom (AVGO)",
+                        "index": 11
+                      },
+                      "TSLA": {
+                        "text": "Tesla (TSLA)",
+                        "index": 12
+                      },
+                      "BRK-B": {
+                        "text": "Berkshire Hathaway (BRK-B)",
+                        "index": 13
+                      },
+                      "JPM": {
+                        "text": "JPMorgan Chase (JPM)",
+                        "index": 14
+                      },
+                      "ASML": {
+                        "text": "ASML (ASML)",
+                        "index": 15
+                      },
+                      "SAP": {
+                        "text": "SAP (SAP)",
+                        "index": 16
+                      },
+                      "NVO": {
+                        "text": "Novo Nordisk (NVO)",
+                        "index": 17
+                      },
+                      "SHEL": {
+                        "text": "Shell (SHEL)",
+                        "index": 18
+                      },
+                      "AZN": {
+                        "text": "AstraZeneca (AZN)",
+                        "index": 19
+                      },
+                      "NVS": {
+                        "text": "Novartis (NVS)",
+                        "index": 20
+                      },
+                      "RHHBY": {
+                        "text": "Roche (RHHBY)",
+                        "index": 21
+                      },
+                      "NSRGY": {
+                        "text": "Nestlé (NSRGY)",
+                        "index": 22
+                      },
+                      "LVMUY": {
+                        "text": "LVMH (LVMUY)",
+                        "index": 23
+                      },
+                      "SIEGY": {
+                        "text": "Siemens (SIEGY)",
+                        "index": 24
+                      }
                     }
                   }
                 ]
@@ -459,20 +672,51 @@
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "Last price" },
+            "matcher": {
+              "id": "byName",
+              "options": "Last price"
+            },
             "properties": [
-              { "id": "unit", "value": "currencyUSD" },
-              { "id": "decimals", "value": 2 }
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "Day %" },
+            "matcher": {
+              "id": "byName",
+              "options": "Day %"
+            },
             "properties": [
-              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
-              { "id": "color", "value": { "mode": "continuous-RdYlGr" } },
-              { "id": "min", "value": -3 },
-              { "id": "max", "value": 3 },
-              { "id": "unit", "value": "percent" }
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-RdYlGr"
+                }
+              },
+              {
+                "id": "min",
+                "value": -3
+              },
+              {
+                "id": "max",
+                "value": 3
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              }
             ]
           }
         ]
@@ -483,8 +727,16 @@
       "type": "table",
       "title": "Indexes & FX",
       "description": "Index levels are POINTS and EUR/USD is a rate - deliberately no currency symbol here (a $ on the VIX would be a lie).",
-      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 36 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
@@ -492,14 +744,24 @@
           "rawSql": "WITH r AS (SELECT ticker, trading_date, close, lag(close) OVER (PARTITION BY ticker ORDER BY trading_date) AS prev, row_number() OVER (PARTITION BY ticker ORDER BY trading_date DESC) AS rn FROM silver.prices_daily WHERE ticker LIKE '^%' OR ticker LIKE '%=X') SELECT ticker AS \"Index / pair\", trading_date AS \"Date\", close AS \"Last level\", round((close / prev - 1) * 100, 2) AS \"Day %\" FROM r WHERE rn = 1 ORDER BY ticker"
         }
       ],
-      "options": { "sortBy": [] },
+      "options": {
+        "sortBy": []
+      },
       "fieldConfig": {
         "defaults": {
-          "custom": { "align": "auto", "cellOptions": { "type": "auto" } }
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Index / pair" },
+            "matcher": {
+              "id": "byName",
+              "options": "Index / pair"
+            },
             "properties": [
               {
                 "id": "mappings",
@@ -507,10 +769,22 @@
                   {
                     "type": "value",
                     "options": {
-                      "^GSPC": { "text": "S&P 500 (^GSPC)", "index": 0 },
-                      "^VIX": { "text": "VIX volatility index (^VIX)", "index": 1 },
-                      "^W5000": { "text": "Wilshire 5000 (^W5000)", "index": 2 },
-                      "EURUSD=X": { "text": "EUR/USD market rate (EURUSD=X)", "index": 3 }
+                      "^GSPC": {
+                        "text": "S&P 500 (^GSPC)",
+                        "index": 0
+                      },
+                      "^VIX": {
+                        "text": "VIX volatility index (^VIX)",
+                        "index": 1
+                      },
+                      "^W5000": {
+                        "text": "Wilshire 5000 (^W5000)",
+                        "index": 2
+                      },
+                      "EURUSD=X": {
+                        "text": "EUR/USD market rate (EURUSD=X)",
+                        "index": 3
+                      }
                     }
                   }
                 ]
@@ -518,23 +792,60 @@
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "Last level" },
+            "matcher": {
+              "id": "byName",
+              "options": "Last level"
+            },
             "properties": [
-              { "id": "decimals", "value": 2 }
+              {
+                "id": "decimals",
+                "value": 2
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "Day %" },
+            "matcher": {
+              "id": "byName",
+              "options": "Day %"
+            },
             "properties": [
-              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
-              { "id": "color", "value": { "mode": "continuous-RdYlGr" } },
-              { "id": "min", "value": -3 },
-              { "id": "max", "value": 3 },
-              { "id": "unit", "value": "percent" }
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-RdYlGr"
+                }
+              },
+              {
+                "id": "min",
+                "value": -3
+              },
+              {
+                "id": "max",
+                "value": 3
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              }
             ]
           }
         ]
       }
+    }
+  ],
+  "links": [
+    {
+      "title": "Charts (deep dive)",
+      "type": "link",
+      "url": "/d/cef-sentinel-charts",
+      "icon": "dashboard",
+      "keepTime": true
     }
   ]
 }

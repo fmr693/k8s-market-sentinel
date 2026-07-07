@@ -1,0 +1,244 @@
+{
+  "title": "CEF Sentinel - Charts",
+  "uid": "cef-sentinel-charts",
+  "description": "Deep-dive time series, moved out of the main overview on purpose (2026-07-07): daily premium/discount, discount z-score and the ESTIMATED intraday discount. Pick few CEFs in the selector - with all 19 the lines become spaghetti. Not investment advice.",
+  "tags": [
+    "sentinel",
+    "business"
+  ],
+  "schemaVersion": 39,
+  "editable": true,
+  "timezone": "browser",
+  "time": {
+    "from": "now-1y",
+    "to": "now"
+  },
+  "refresh": "5m",
+  "links": [
+    {
+      "title": "Overview",
+      "type": "link",
+      "url": "/d/cef-sentinel",
+      "icon": "dashboard",
+      "keepTime": true
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "cef",
+        "label": "CEF",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "neon-sentinel"
+        },
+        "query": "SELECT DISTINCT ticker FROM gold.cef_snapshot ORDER BY 1",
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Premium/discount - daily (definitive: close vs same-day NAV)",
+      "description": "Reference lines at -5% / -7% are personal buy levels (display only; alerting rules live in the phase-6 ConfigMap). Zero line = trading at par.",
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT trading_date::timestamptz AS \"time\", ticker, discount * 100 AS \"prem/disc\" FROM gold.discount_daily WHERE ticker IN (${cef:sqlstring}) AND $__timeFilter(trading_date::timestamptz) ORDER BY 1"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "asc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "pointSize": 4,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": -7
+              },
+              {
+                "color": "orange",
+                "value": -5
+              },
+              {
+                "color": "#808080",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Discount z-score (252 trading sessions)",
+      "description": "How anomalous is today's premium/discount vs its own 1-year history. Very negative = anomalously cheap.",
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT trading_date::timestamptz AS \"time\", ticker, zscore FROM gold.discount_zscore WHERE ticker IN (${cef:sqlstring}) AND $__timeFilter(trading_date::timestamptz) ORDER BY 1"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "asc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": -2
+              },
+              {
+                "color": "#808080",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Intraday premium/discount - ESTIMATED (live price vs yesterday's NAV)",
+      "description": "By construction every intraday point is an estimate: today's NAV does not exist until ~23:00 CET. Prices ~15 min delayed (yfinance).",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 10
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT ts AS \"time\", ticker, premium_discount * 100 AS \"prem/disc\" FROM gold.discount_intraday WHERE ticker IN (${cef:sqlstring}) AND $__timeFilter(ts) ORDER BY 1"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "asc"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "#808080",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    }
+  ]
+}

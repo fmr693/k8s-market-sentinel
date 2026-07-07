@@ -50,6 +50,7 @@ configMapGenerator:
   - name: grafana-dashboards
     files:
       - deploy/grafana/dashboards/cef-sentinel.json
+      - deploy/grafana/dashboards/cef-charts.json
       - deploy/grafana/dashboards/pipeline-health.json
 
 secretGenerator:
