@@ -535,6 +535,157 @@
       }
     },
     {
+      "id": 11,
+      "type": "table",
+      "title": "Yield & distributions (TTM) - sorted by yield on price",
+      "description": "Distribution yield per CEF from gold.yield_ttm. 'Yield on price' = what a buyer today collects (12 months of distributions / current price). 'Yield on NAV' = what the portfolio must actually earn to sustain the payout - the gap between the two IS the discount. 'Yield current' = last distribution annualized at the fund's own payment cadence; below the TTM yield means the fund recently CUT its distribution - the event that historically precedes discount blowouts. 'Dist trend' compares the current annualized rate vs what was actually paid over 12 months: negative = cutting, ~0 = stable. High yield is NOT automatically good: it can signal distress - read it together with the discount z-score above.",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT ticker AS \"CEF\", round(yield_ttm_on_price_pct, 2) AS \"Yield on price %\", round(yield_ttm_on_nav_pct, 2) AS \"Yield on NAV %\", round(yield_current_pct, 2) AS \"Yield current %\", round((yield_current_pct / yield_ttm_on_price_pct - 1) * 100, 1) AS \"Dist trend %\", dist_ttm AS \"Paid 12m $\", n_dist_ttm AS \"Payments (1y)\", last_amount AS \"Last dist $\", last_ex_date AS \"Last ex-date\" FROM gold.yield_ttm ORDER BY yield_ttm_on_price_pct DESC"
+        }
+      ],
+      "options": {
+        "sortBy": []
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Yield on price %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Yield on NAV %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Yield current %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Dist trend %"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-RdYlGr"
+                }
+              },
+              {
+                "id": "min",
+                "value": -30
+              },
+              {
+                "id": "max",
+                "value": 30
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Paid 12m $"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Last dist $"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "id": 9,
       "type": "table",
       "title": "Stocks & ETFs watchlist",
@@ -543,7 +694,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 17
+        "y": 27
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -731,7 +882,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 17
+        "y": 27
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
