@@ -16,7 +16,10 @@ datasources:
       password: $__env{GRAFANA_DB_PASSWORD}
     jsonData:
       database: $__env{GRAFANA_DB_NAME}
-      sslmode: require # Neon exige TLS
+      # Configurable porque difiere por entorno: Neon exige TLS (require);
+      # el Postgres local del docker-compose no lo tiene (disable).
+      # (Hallazgo del smoke test local, 2026-07-07.)
+      sslmode: $__env{GRAFANA_DB_SSLMODE}
       postgresVersion: 1500
       timescaledb: false
     isDefault: true

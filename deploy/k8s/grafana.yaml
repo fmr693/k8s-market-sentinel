@@ -47,6 +47,9 @@ spec:
             - name: GRAFANA_DB_PASSWORD
               valueFrom:
                 secretKeyRef: { name: sentinel-env, key: GRAFANA_DB_PASSWORD }
+            - name: GRAFANA_DB_SSLMODE
+              valueFrom:
+                secretKeyRef: { name: sentinel-env, key: GRAFANA_DB_SSLMODE }
             # Sin registro ni usuarios extra: herramienta personal.
             - name: GF_USERS_ALLOW_SIGN_UP
               value: "false"

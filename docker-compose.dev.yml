@@ -40,6 +40,7 @@ services:
       GRAFANA_DB_NAME: ${GRAFANA_DB_NAME}
       GRAFANA_DB_USER: ${GRAFANA_DB_USER}
       GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD}
+      GRAFANA_DB_SSLMODE: ${GRAFANA_DB_SSLMODE:-disable}
     volumes:
       - ./deploy/grafana/datasource-neon.yaml:/etc/grafana/provisioning/datasources/neon.yaml:ro
       - ./deploy/grafana/dashboards-provider.yaml:/etc/grafana/provisioning/dashboards/provider.yaml:ro
