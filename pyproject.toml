@@ -12,6 +12,9 @@ dependencies = [
     # Solo carga .env en desarrollo local; en K8s las env vars vienen del Secret
     # y python-dotenv NO pisa variables ya definidas.
     "python-dotenv>=1.0",
+    # Calendario bursátil XNYS (fase 4, decisión 4.1): festivos con reglas
+    # móviles, medias sesiones y DST bien hecho. Encapsulada en market_hours.py.
+    "exchange-calendars>=4.5",
 ]
 
 [project.optional-dependencies]
