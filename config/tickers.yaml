@@ -51,3 +51,7 @@ defaults:
   # Solape para series FRED: mayor que el de precios porque FRED revisa
   # hacia atrás (el PIB se revisa meses después de publicarse).
   macro_overlap_days: 30
+  # Cadencia del poller intradía (duda #4: config-driven, ~60-90s). Más
+  # rápido no aporta (el dato de Yahoo ya llega ~15 min retrasado) y solo
+  # gasta presupuesto de rate-limit y almacenamiento.
+  poll_interval_seconds: 75

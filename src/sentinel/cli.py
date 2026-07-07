@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import argparse
 import logging
+import signal
 import sys
+import threading
 
-from . import db
+from . import db, poller
 from .config import load_universe
 from .ingest.fx import ingest_fx_rates
 from .ingest.macro import ingest_macro_series
@@ -76,6 +78,11 @@ def main(argv: list[str] | None = None) -> int:
         help='Subconjunto de pares "EUR/USD" (por defecto, todos los de config)',
     )
 
+    sub.add_parser(
+        "poller",
+        help="Poller intradía: proceso vivo con horario de mercado (fase 4)",
+    )
+
     p_nav = sub.add_parser(
         "ingest-nav",
         help="NAV diario de los CEFs desde CEFConnect (último año, upsert completo)",
@@ -114,6 +121,16 @@ def main(argv: list[str] | None = None) -> int:
         with db.connect() as conn:
             result = ingest_fx_rates(conn, universe, args.pairs)
         return _print_ingest_summary(result, "fixings")
+
+    if args.command == "poller":
+        # El Event + el manejador de señales viven AQUÍ (capa de proceso);
+        # poller.run() solo conoce el Event — así el bucle es testeable sin
+        # tocar señales. SIGTERM = K8s pide morir; SIGINT = Ctrl+C en local.
+        stop = threading.Event()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            signal.signal(sig, lambda *_: stop.set())
+        poller.run(stop, load_universe())
+        return 0
 
     if args.command == "ingest-nav":
         universe = load_universe()

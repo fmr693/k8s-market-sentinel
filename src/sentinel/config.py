@@ -55,6 +55,7 @@ class Universe:
     price_history_start: dt.date
     overlap_days: int
     macro_overlap_days: int
+    poll_interval_seconds: int
 
     @property
     def price_tickers(self) -> list[str]:
@@ -82,4 +83,5 @@ def load_universe(path: Path | None = None) -> Universe:
         price_history_start=dt.date.fromisoformat(defaults["price_history_start"]),
         overlap_days=int(defaults["overlap_days"]),
         macro_overlap_days=int(defaults["macro_overlap_days"]),
+        poll_interval_seconds=int(defaults["poll_interval_seconds"]),
     )
