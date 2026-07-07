@@ -33,7 +33,7 @@ resources:
 images:
   - name: sentinel
     newName: ghcr.io/fmr693/k8s-market-sentinel
-    newTag: "0.2.0"
+    newTag: "0.3.0"
 
 configMapGenerator:
   - name: sentinel-tickers
