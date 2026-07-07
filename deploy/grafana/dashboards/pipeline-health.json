@@ -1,0 +1,268 @@
+{
+  "title": "Pipeline Health",
+  "uid": "pipeline-health",
+  "description": "Operations dashboard: data freshness per source, ingest activity and NAV quality. SQL-over-Neon for now; process metrics (poller ticks, errors, durations) arrive with Prometheus in phase 7.",
+  "tags": ["sentinel", "ops"],
+  "schemaVersion": 39,
+  "editable": true,
+  "timezone": "browser",
+  "time": { "from": "now-14d", "to": "now" },
+  "refresh": "5m",
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Daily prices - hours since last ingest",
+      "description": "Slow-lane CronJob (nightly, Mon-Fri). Yellow past ~1 missed run; red past 2. Weekends age legitimately.",
+      "gridPos": { "h": 5, "w": 5, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT extract(epoch FROM now() - max(ingested_at)) / 3600 AS hours FROM silver.prices_daily"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "value" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 30 },
+              { "color": "red", "value": 78 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Intraday prices - hours since last tick",
+      "description": "The poller's pulse. Ages legitimately overnight (~18h) and over weekends (~65h): red only beyond a full weekend.",
+      "gridPos": { "h": 5, "w": 5, "x": 5, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT extract(epoch FROM now() - max(ingested_at)) / 3600 AS hours FROM silver.prices_intraday"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "value" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 20 },
+              { "color": "red", "value": 72 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "NAV - hours since last ingest",
+      "description": "CEFConnect scraper (nightly, Mon-Fri). The fragile piece: watch this one.",
+      "gridPos": { "h": 5, "w": 5, "x": 10, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT extract(epoch FROM now() - max(ingested_at)) / 3600 AS hours FROM silver.navs"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "value" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 30 },
+              { "color": "red", "value": 78 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "FRED macro - hours since last ingest",
+      "gridPos": { "h": 5, "w": 5, "x": 15, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT extract(epoch FROM now() - max(ingested_at)) / 3600 AS hours FROM silver.macro_series WHERE series_id <> 'EURUSD_ECB'"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "value" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 30 },
+              { "color": "red", "value": 78 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "ECB FX - hours since last ingest",
+      "gridPos": { "h": 5, "w": 4, "x": 20, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT extract(epoch FROM now() - max(ingested_at)) / 3600 AS hours FROM silver.macro_series WHERE series_id = 'EURUSD_ECB'"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "value" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 30 },
+              { "color": "red", "value": 78 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Rows ingested per day, by table (log scale)",
+      "description": "Did the slow lane work last night? Log scale because volumes differ by orders of magnitude (intraday ~9k/day vs NAV ~19/day).",
+      "gridPos": { "h": 9, "w": 16, "x": 0, "y": 5 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT day::timestamptz AS \"time\", src, n::double precision AS rows FROM (SELECT ingested_at::date AS day, 'prices_daily' AS src, count(*) AS n FROM silver.prices_daily GROUP BY 1 UNION ALL SELECT ingested_at::date, 'prices_intraday', count(*) FROM silver.prices_intraday GROUP BY 1 UNION ALL SELECT ingested_at::date, 'navs', count(*) FROM silver.navs GROUP BY 1 UNION ALL SELECT ingested_at::date, 'macro_series', count(*) FROM silver.macro_series GROUP BY 1) t WHERE $__timeFilter(day::timestamptz) ORDER BY 1"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "lineWidth": 1,
+            "scaleDistribution": { "type": "log", "log": 10 }
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "CEFs with stale NAV (rancio)",
+      "description": "NAV older than 4 natural days. Anything above zero on a weekday = the CEFConnect scraper is failing.",
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 5 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(*) AS stale FROM gold.cef_snapshot WHERE nav_quality = 'rancio'"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 3 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Stale NAVs - detail",
+      "gridPos": { "h": 5, "w": 8, "x": 16, "y": 9 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT ticker, nav_date, nav_age_days AS \"age (days)\" FROM gold.cef_snapshot WHERE nav_quality = 'rancio' ORDER BY nav_age_days DESC"
+        }
+      ],
+      "options": { "sortBy": [] },
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Bronze fetch log - by source",
+      "description": "Raw audit trail (bronze.raw_fetches). A source with zero fetches in 24h on a weekday points at a broken job.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT source, max(fetched_at) AS \"last fetch\", count(*) FILTER (WHERE fetched_at > now() - interval '24 hours') AS \"fetches 24h\", count(*) AS \"fetches total\" FROM bronze.raw_fetches GROUP BY source ORDER BY source"
+        }
+      ],
+      "options": { "sortBy": [] },
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    },
+    {
+      "id": 10,
+      "type": "text",
+      "title": "Coming in phase 7: process metrics",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "options": {
+        "mode": "markdown",
+        "content": "This dashboard reads **data freshness from Neon** (every silver table carries `ingested_at`).\n\nWhat it *cannot* see - and Prometheus will add in **phase 7**:\n\n- poller ticks, errors and consecutive-failure counts\n- job durations and exit codes over time\n- container memory / CPU / restarts\n- scrape-level detail per source\n\nUntil then: `kubectl -n sentinel get pods` and the pod logs are the source of process truth."
+      }
+    }
+  ]
+}

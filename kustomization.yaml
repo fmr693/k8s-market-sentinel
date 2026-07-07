@@ -24,6 +24,7 @@ resources:
   - deploy/k8s/cronjob-fx.yaml
   - deploy/k8s/cronjob-macro.yaml
   - deploy/k8s/deployment-poller.yaml
+  - deploy/k8s/grafana.yaml
 
 # Transformador de imagen: los manifests de deploy/k8s/ referencian el nombre
 # neutro `sentinel:dev` (el que usa el flujo local con `k3d image import`);
@@ -38,6 +39,18 @@ configMapGenerator:
   - name: sentinel-tickers
     files:
       - tickers.yaml=config/tickers.yaml
+  # Grafana aprovisionado como código (fase 5): mismos generadores, misma
+  # filosofía — editar un dashboard = commit del JSON + kubectl apply -k .
+  - name: grafana-provisioning-datasources
+    files:
+      - neon.yaml=deploy/grafana/datasource-neon.yaml
+  - name: grafana-provisioning-dashboards
+    files:
+      - provider.yaml=deploy/grafana/dashboards-provider.yaml
+  - name: grafana-dashboards
+    files:
+      - deploy/grafana/dashboards/cef-sentinel.json
+      - deploy/grafana/dashboards/pipeline-health.json
 
 secretGenerator:
   - name: sentinel-env

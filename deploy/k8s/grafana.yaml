@@ -1,0 +1,112 @@
+# Grafana SIN estado (fase 5, decisión 5.1): ni PVC ni SQLite que cuidar.
+# Todo lo que lo define entra por ConfigMaps (datasource + dashboards JSON del
+# repo) y Secret (credenciales). El pod es desechable: muere, renace idéntico
+# — la misma filosofía crash-only del poller, aplicada al visor. La verdad
+# vive en Git; la UI es un borrador (exportar JSON → commit → apply).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  labels:
+    app.kubernetes.io/part-of: k8s-market-sentinel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: grafana
+        app.kubernetes.io/part-of: k8s-market-sentinel
+    spec:
+      securityContext:
+        runAsNonRoot: true # la imagen oficial ya corre como uid 472 (grafana)
+      containers:
+        - name: grafana
+          image: grafana/grafana:12.0.0
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            # Env EXPLÍCITAS con secretKeyRef, y no envFrom del Secret entero:
+            # Grafana es la pieza con UI expuesta — no debe ver DATABASE_URL
+            # (owner) ni la API key de FRED. Solo sus 5 claves (decisión 5.3).
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: sentinel-env, key: GRAFANA_ADMIN_PASSWORD }
+            - name: GRAFANA_DB_HOST
+              valueFrom:
+                secretKeyRef: { name: sentinel-env, key: GRAFANA_DB_HOST }
+            - name: GRAFANA_DB_NAME
+              valueFrom:
+                secretKeyRef: { name: sentinel-env, key: GRAFANA_DB_NAME }
+            - name: GRAFANA_DB_USER
+              valueFrom:
+                secretKeyRef: { name: sentinel-env, key: GRAFANA_DB_USER }
+            - name: GRAFANA_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: sentinel-env, key: GRAFANA_DB_PASSWORD }
+            # Sin registro ni usuarios extra: herramienta personal.
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+          volumeMounts:
+            - name: provisioning-datasources
+              mountPath: /etc/grafana/provisioning/datasources
+              readOnly: true
+            - name: provisioning-dashboards
+              mountPath: /etc/grafana/provisioning/dashboards
+              readOnly: true
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          # A DIFERENCIA del poller, Grafana SÍ recibe tráfico → sí hay
+          # readinessProbe (decide si el Service le enruta) además de la
+          # liveness. El contraste entre ambos manifests es deliberado.
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+      volumes:
+        - name: provisioning-datasources
+          configMap:
+            name: grafana-provisioning-datasources
+        - name: provisioning-dashboards
+          configMap:
+            name: grafana-provisioning-dashboards
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
+---
+# NodePort (elección 5.4): http://<ip-del-servidor>:30300, sin piezas extra
+# (Ingress/LoadBalancer quedan como mejora si algún día hace falta TLS/dominio).
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  labels:
+    app.kubernetes.io/part-of: k8s-market-sentinel
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      nodePort: 30300

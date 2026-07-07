@@ -1,0 +1,372 @@
+{
+  "title": "CEF Sentinel",
+  "uid": "cef-sentinel",
+  "description": "Business dashboard: CEF premiums/discounts, z-scores and macro traffic lights. Data is informational only; intraday discounts are ESTIMATES (yesterday's NAV). Not investment advice.",
+  "tags": ["sentinel", "business"],
+  "schemaVersion": 39,
+  "editable": true,
+  "timezone": "browser",
+  "time": { "from": "now-1y", "to": "now" },
+  "refresh": "5m",
+  "templating": {
+    "list": [
+      {
+        "name": "cef",
+        "label": "CEF",
+        "type": "query",
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+        "query": "SELECT DISTINCT ticker FROM gold.cef_snapshot ORDER BY 1",
+        "multi": true,
+        "includeAll": true,
+        "current": { "text": "All", "value": "$__all" },
+        "refresh": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "HY credit spread (ICE BofA OAS)",
+      "description": "Widening spreads = stress = the buying window may open. Last ~3y only (ICE licence limit on FRED API).",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT obs_date::timestamptz AS \"time\", value FROM silver.macro_series WHERE series_id = 'BAMLH0A0HYM2' ORDER BY 1"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "graphMode": "area",
+        "colorMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 4.5 },
+              { "color": "red", "value": 6 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "EUR/USD (ECB fixing)",
+      "description": "Official daily ECB fixing (~16:00 CET). Personal band: 1.10 - 1.20; outside the band = act (display reference only).",
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT obs_date::timestamptz AS \"time\", value FROM silver.macro_series WHERE series_id = 'EURUSD_ECB' ORDER BY 1"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "graphMode": "area",
+        "colorMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 4,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1.1 },
+              { "color": "red", "value": 1.2 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Buffett indicator (W5000 / GDP)",
+      "description": "Total US market cap proxy vs nominal GDP. What matters is the level vs its own history, not the absolute number.",
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT obs_date::timestamptz AS \"time\", buffett_pct FROM gold.buffett_indicator ORDER BY 1"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "graphMode": "area",
+        "colorMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 150 },
+              { "color": "red", "value": 200 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "VIX",
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT trading_date::timestamptz AS \"time\", close FROM silver.prices_daily WHERE ticker = '^VIX' ORDER BY 1"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "graphMode": "area",
+        "colorMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 20 },
+              { "color": "red", "value": 30 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "CEF universe - now (sorted by z-score: most anomalously cheap first)",
+      "description": "One row per CEF from gold.cef_snapshot. premium/discount sign convention: negative = discount (buy zone), positive = premium. nav_quality: estimado = normal intraday state (yesterday's NAV); rancio = NAV older than 4 days, scraper likely failing. Z-scores with low n_obs are unreliable.",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 5 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT ticker, price, nav, nav_date, nav_age_days AS \"nav age (d)\", nav_quality, round(premium_discount * 100, 2) AS \"prem/disc %\", estado AS status, round(zscore::numeric, 2) AS \"z-score\", n_obs, zscore_date FROM gold.cef_snapshot ORDER BY zscore ASC NULLS LAST"
+        }
+      ],
+      "options": { "sortBy": [] },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "cellOptions": { "type": "auto" } }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "prem/disc %" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
+              { "id": "color", "value": { "mode": "continuous-GrYlRd" } },
+              { "id": "min", "value": -15 },
+              { "id": "max", "value": 15 },
+              { "id": "unit", "value": "percent" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "z-score" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
+              { "id": "color", "value": { "mode": "continuous-GrYlRd" } },
+              { "id": "min", "value": -3 },
+              { "id": "max", "value": 3 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "nav_quality" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": { "estimado": { "color": "text", "index": 0 }, "rancio": { "color": "red", "index": 1 } } }
+                ]
+              },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Premium/discount - daily (definitive: close vs same-day NAV)",
+      "description": "Reference lines at -5% / -7% are personal buy levels (display only; alerting rules live in the phase-6 ConfigMap). Zero line = trading at par.",
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 17 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT trading_date::timestamptz AS \"time\", ticker, discount * 100 AS \"prem/disc\" FROM gold.discount_daily WHERE ticker IN (${cef:sqlstring}) AND $__timeFilter(trading_date::timestamptz) ORDER BY 1"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "asc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "pointSize": 4,
+            "showPoints": "never",
+            "thresholdsStyle": { "mode": "line" }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "transparent", "value": null },
+              { "color": "red", "value": -7 },
+              { "color": "orange", "value": -5 },
+              { "color": "#808080", "value": 0 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Discount z-score (252 trading sessions)",
+      "description": "How anomalous is today's premium/discount vs its own 1-year history. Very negative = anomalously cheap.",
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 17 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT trading_date::timestamptz AS \"time\", ticker, zscore FROM gold.discount_zscore WHERE ticker IN (${cef:sqlstring}) AND $__timeFilter(trading_date::timestamptz) ORDER BY 1"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "asc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "thresholdsStyle": { "mode": "line" }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "transparent", "value": null },
+              { "color": "orange", "value": -2 },
+              { "color": "#808080", "value": 0 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Intraday premium/discount - ESTIMATED (live price vs yesterday's NAV)",
+      "description": "By construction every intraday point is an estimate: today's NAV does not exist until ~23:00 CET. Prices ~15 min delayed (yfinance).",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 27 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT ts AS \"time\", ticker, premium_discount * 100 AS \"prem/disc\" FROM gold.discount_intraday WHERE ticker IN (${cef:sqlstring}) AND $__timeFilter(ts) ORDER BY 1"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "asc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "thresholdsStyle": { "mode": "line" }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "transparent", "value": null },
+              { "color": "#808080", "value": 0 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Market watchlist (benchmarks + stocks - no NAV, price only)",
+      "description": "Everything in the universe that is not a CEF: indexes, gold, FX and the stocks watchlist. Here green = up on the day (standard market semantics, unlike the discount table).",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 36 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "WITH r AS (SELECT ticker, trading_date, close, lag(close) OVER (PARTITION BY ticker ORDER BY trading_date) AS prev, row_number() OVER (PARTITION BY ticker ORDER BY trading_date DESC) AS rn FROM silver.prices_daily WHERE ticker NOT IN (SELECT DISTINCT ticker FROM silver.navs)) SELECT ticker, trading_date AS \"last close\", close, round((close / prev - 1) * 100, 2) AS \"day %\" FROM r WHERE rn = 1 ORDER BY ticker"
+        }
+      ],
+      "options": { "sortBy": [] },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "cellOptions": { "type": "auto" } }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "day %" },
+            "properties": [
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } },
+              { "id": "color", "value": { "mode": "continuous-RdYlGr" } },
+              { "id": "min", "value": -3 },
+              { "id": "max", "value": 3 },
+              { "id": "unit", "value": "percent" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

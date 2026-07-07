@@ -1,0 +1,16 @@
+# Provider de dashboards: Grafana carga TODO .json que encuentre en `path`
+# (ahí monta K8s el ConfigMap generado desde deploy/grafana/dashboards/).
+# foldersFromFilesStructure + updateIntervalSeconds: si el ConfigMap cambia,
+# el kubelet refresca el volumen (~1 min) y Grafana recarga el dashboard solo
+# — editar un dashboard = commit + kubectl apply, sin reiniciar el pod.
+apiVersion: 1
+
+providers:
+  - name: sentinel
+    folder: Sentinel
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: false # la UI es borrador: exportar JSON y commitear (flujo 5.1)
+    options:
+      path: /var/lib/grafana/dashboards

@@ -24,5 +24,26 @@ services:
       timeout: 3s
       retries: 10
 
+  # Grafana LOCAL para iterar dashboards (fase 5): monta el MISMO datasource y
+  # los MISMOS JSON que verá el clúster — lo que ves aquí es lo que habrá allí.
+  # Ciclo de edición: tocar en la UI (borrador) → Export JSON → pegarlo en
+  # deploy/grafana/dashboards/ → commit. Lee las credenciales del .env.
+  grafana:
+    image: grafana/grafana:12.0.0
+    container_name: sentinel-dev-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GRAFANA_DB_HOST: ${GRAFANA_DB_HOST}
+      GRAFANA_DB_NAME: ${GRAFANA_DB_NAME}
+      GRAFANA_DB_USER: ${GRAFANA_DB_USER}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD}
+    volumes:
+      - ./deploy/grafana/datasource-neon.yaml:/etc/grafana/provisioning/datasources/neon.yaml:ro
+      - ./deploy/grafana/dashboards-provider.yaml:/etc/grafana/provisioning/dashboards/provider.yaml:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+
 volumes:
   pgdata:

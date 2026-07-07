@@ -1,0 +1,23 @@
+# Datasource aprovisionado como código (fase 5, decisión 5.1): Grafana arranca
+# ya conectado a Neon, sin clicks. Las credenciales NO viven aquí (esto va a
+# Git): llegan como variables de entorno desde el Secret de K8s — sintaxis
+# $__env{VAR} de Grafana — con el rol grafana_ro de SOLO LECTURA sobre
+# gold/silver (decisión 5.3: el visor no puede romper lo que enseña).
+apiVersion: 1
+
+datasources:
+  - name: Neon (sentinel)
+    uid: neon-sentinel # los dashboards referencian este uid: estable a propósito
+    type: grafana-postgresql-datasource
+    access: proxy
+    url: $__env{GRAFANA_DB_HOST}
+    user: $__env{GRAFANA_DB_USER}
+    secureJsonData:
+      password: $__env{GRAFANA_DB_PASSWORD}
+    jsonData:
+      database: $__env{GRAFANA_DB_NAME}
+      sslmode: require # Neon exige TLS
+      postgresVersion: 1500
+      timescaledb: false
+    isDefault: true
+    editable: false # la verdad vive en el repo, no en la UI

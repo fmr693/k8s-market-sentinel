@@ -100,6 +100,27 @@ kubectl -n sentinel logs job/smoke-fx
 Éxito = logs de ingesta con upserts contra Neon **desde el clúster del
 servidor**. Con eso, la Fase 3 queda cerrada de verdad.
 
+## 6b. Grafana (fase 5)
+
+El `apply -k` del paso 4 ya despliega Grafana. Prerrequisitos que NO viajan
+por git (una sola vez):
+
+1. **Rol de solo lectura en Neon** (como owner, SQL en `.env.example`):
+   `CREATE ROLE grafana_ro ...` + los `GRANT` + `ALTER DEFAULT PRIVILEGES`.
+2. **Claves nuevas en el `.env`** del servidor: `GRAFANA_ADMIN_PASSWORD`,
+   `GRAFANA_DB_HOST/NAME/USER/PASSWORD` (plantilla en `.env.example`).
+   Sin ellas el pod de Grafana falla con CreateContainerConfigError
+   (sus `secretKeyRef` exigen que las claves existan en el Secret).
+
+Verificación:
+
+```bash
+kubectl -n sentinel get pods -l app.kubernetes.io/name=grafana
+# → abrir http://<ip-del-servidor>:30300  (usuario admin + GRAFANA_ADMIN_PASSWORD)
+# Deben aparecer los dashboards "CEF Sentinel" y "Pipeline Health" en la
+# carpeta Sentinel, ya conectados a Neon.
+```
+
 ## 7. Limpieza y notas
 
 ```bash
