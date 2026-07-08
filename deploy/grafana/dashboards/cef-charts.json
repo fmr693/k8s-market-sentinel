@@ -240,5 +240,36 @@
         "overrides": []
       }
     }
-  ]
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "neon-sentinel"
+        },
+        "enable": true,
+        "iconColor": "red",
+        "name": "Distribution cuts",
+        "hide": false,
+        "target": {
+          "refId": "cuts",
+          "format": "table",
+          "rawSql": "SELECT ex_date::timestamptz AS time, ticker || ' distribution cut ' || change_pct || '%' AS text, 'cut' AS tags FROM gold.distribution_cuts WHERE ticker IN (${cef:sqlstring}) AND $__timeFilter(ex_date::timestamptz)"
+        }
+      }
+    ]
+  }
 }
