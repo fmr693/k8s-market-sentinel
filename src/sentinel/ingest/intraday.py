@@ -103,7 +103,7 @@ def ingest_intraday(
     arranque, el máximo de 1m que da yfinance). Un fallo aquí lanza excepción:
     el poller decide si es "log y siguiente tick" o motivo de crash.
     """
-    tickers = universe.price_tickers
+    tickers = universe.price_tickers_intraday  # sin ^W5000 y demás sin velas 1m
     df = yf.download(
         tickers=" ".join(tickers),
         period=period,

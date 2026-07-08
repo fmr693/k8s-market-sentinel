@@ -82,3 +82,10 @@ defaults:
   # rápido no aporta (el dato de Yahoo ya llega ~15 min retrasado) y solo
   # gasta presupuesto de rate-limit y almacenamiento.
   poll_interval_seconds: 75
+  # Tickers que se ingestan en DIARIO pero NO en intradía. ^W5000 (Wilshire)
+  # no tiene velas 1m en Yahoo → cada tick del poller logueaba 2 líneas de
+  # error por él. Su única función (numerador del Buffett) se calcula sobre
+  # velas diarias, así que excluirlo del carril intradía no pierde nada.
+  # Config-driven puro: añadir/quitar aquí, el código no cambia.
+  intraday_exclude:
+    - ^W5000

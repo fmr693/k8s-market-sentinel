@@ -53,6 +53,7 @@ class Universe:
     stocks: list[str]  # acciones sueltas (sin NAV): solo precio, sin descuento
     fred_series: list[str]
     fx_pairs: list[str]  # formato "EUR/USD"
+    intraday_exclude: list[str]  # ingestados en diario pero NO en intradía (p.ej. ^W5000, sin 1m)
     price_history_start: dt.date
     overlap_days: int
     macro_overlap_days: int
@@ -62,6 +63,14 @@ class Universe:
     def price_tickers(self) -> list[str]:
         """Todo lo que se ingesta vía yfinance (CEFs + benchmarks + acciones)."""
         return self.cef_credit + self.cef_contrast + self.benchmarks + self.stocks
+
+    @property
+    def price_tickers_intraday(self) -> list[str]:
+        """Como price_tickers pero sin los que no tienen velas 1m en Yahoo
+        (intraday_exclude): el poller no debe pedirlos o loguea errores por tick.
+        El carril DIARIO sigue usando price_tickers (los quiere todos)."""
+        excluded = set(self.intraday_exclude)
+        return [t for t in self.price_tickers if t not in excluded]
 
     @property
     def nav_tickers(self) -> list[str]:
@@ -82,6 +91,7 @@ def load_universe(path: Path | None = None) -> Universe:
         stocks=raw.get("stocks", []),  # opcional: sin la clave, lista vacía
         fred_series=raw["fred_series"],
         fx_pairs=raw["fx_pairs"],
+        intraday_exclude=defaults.get("intraday_exclude", []),  # opcional: sin la clave, no excluye nada
         price_history_start=dt.date.fromisoformat(defaults["price_history_start"]),
         overlap_days=int(defaults["overlap_days"]),
         macro_overlap_days=int(defaults["macro_overlap_days"]),
