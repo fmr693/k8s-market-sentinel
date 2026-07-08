@@ -241,7 +241,6 @@
       "id": 5,
       "type": "table",
       "title": "CEF universe - now (sorted by z-score: most anomalously cheap first)",
-      "description": "One row per CEF from gold.cef_snapshot. Premium/discount sign convention: negative = discount (buy zone), positive = premium. NAV quality: estimado = normal intraday state (yesterday's NAV); rancio = NAV older than 4 days, scraper likely failing. | Z-SCORE, in plain words: how unusual today's premium/discount is versus that fund's OWN last year, in standard deviations. 0 = its normal level; -2 = unusually cheap (roughly the cheapest ~2% of days); +2 = unusually expensive. Big negative z-score with enough observations (Obs 1y) = the anomaly worth investigating.",
       "gridPos": {
         "h": 12,
         "w": 24,
@@ -256,7 +255,7 @@
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT ticker AS \"CEF\", price AS \"Price\", nav AS \"NAV\", nav_date AS \"NAV date\", nav_quality AS \"NAV quality\", round(premium_discount * 100, 2) AS \"Prem/Disc %\", estado AS \"Status\", round(zscore::numeric, 2) AS \"Z-score\", n_obs AS \"Obs (1y)\", zscore_date AS \"Z-score date\" FROM gold.cef_snapshot ORDER BY zscore ASC NULLS LAST"
+          "rawSql": "SELECT s.ticker AS \"CEF\", s.price AS \"Price\", s.nav AS \"NAV\", s.nav_date AS \"NAV date\", s.nav_quality AS \"NAV quality\", round(s.premium_discount * 100, 2) AS \"Prem/Disc %\", s.estado AS \"Status\", round(y.yield_ttm_on_price_pct, 2) AS \"Yield %\", y.n_dist_ttm AS \"Payments/yr\", round(s.zscore::numeric, 2) AS \"Z-score\", s.n_obs AS \"Obs (1y)\", s.zscore_date AS \"Z-score date\" FROM gold.cef_snapshot s LEFT JOIN gold.yield_ttm y ON y.ticker = s.ticker ORDER BY s.zscore ASC NULLS LAST"
         }
       ],
       "options": {
@@ -530,9 +529,41 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Yield %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
           }
         ]
       }
+    },
+    {
+      "id": 12,
+      "type": "text",
+      "title": "Column guide - CEF universe table",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "### Reading the CEF universe table\n\n| Column | Meaning |\n|---|---|\n| **CEF** | Fund name and ticker. The universe is config-driven (tickers.yaml), not hardcoded. |\n| **Price** | Latest market price per share - unadjusted daily close (the real on-screen price). |\n| **NAV** | Net Asset Value per share published by the fund (via CEFConnect): what the portfolio is actually worth. |\n| **NAV date** | Date of the NAV shown. Published once a day after the close, so it normally lags price by one trading day. |\n| **NAV quality** | Freshness computed in SQL: *estimado* = up to 4 calendar days old (normal - weekends/holidays); *rancio* = older, the NAV scraper is likely failing. |\n| **Prem/Disc %** | (Price - NAV) / NAV. Negative = discount (you pay less than the portfolio is worth), positive = premium. Gradient over +/-15%. |\n| **Status** | The sign of Prem/Disc % as a word: Premium / Discount / Par. Some funds (e.g. PIMCO) habitually trade at persistent premiums. |\n| **Yield %** | Distribution yield on PRICE, trailing 12 months: everything paid in the last 12m divided by today's price. Deliberately NOT colored: a very high yield can signal distress, not a gift - see the yield table below for the NAV yield and the cut signal. |\n| **Payments/yr** | Distributions paid in the trailing 12 months (~12 = monthly payer, ~4 = quarterly). |\n| **Z-score** | How unusual today's premium/discount is versus this fund's OWN last year, in standard deviations. 0 = its normal level; -2 = unusually cheap (roughly the cheapest ~2% of days); +2 = unusually expensive. Big negative z-score with enough observations = the anomaly worth investigating. |\n| **Obs (1y)** | Daily observations behind the z-score (max ~252 trading sessions). Low count = young series - read the z-score with caution. |\n| **Z-score date** | Date of the last daily observation used in the z-score (updates after each NAV ingest). |"
+      },
+      "transparent": false
     },
     {
       "id": 11,
@@ -543,7 +574,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 25
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -694,7 +725,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 27
+        "y": 35
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -882,7 +913,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 27
+        "y": 35
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
