@@ -26,3 +26,4 @@ tests/
 *.md
 docker-compose.dev.yml
 .dockerignore
+.github/

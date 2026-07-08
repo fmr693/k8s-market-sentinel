@@ -11,27 +11,45 @@
 
 FROM python:3.13-slim
 
+# uv copiado del contenedor oficial con versión CLAVADA (decisión #36): el
+# binario es estático y pinearlo evita que un uv nuevo cambie el build.
+COPY --from=ghcr.io/astral-sh/uv:0.9.30 /uv /uvx /bin/
+
 # Metadatos OCI: GHCR enlaza la imagen con el repo automáticamente por esta label
 LABEL org.opencontainers.image.source="https://github.com/fmr693/k8s-market-sentinel" \
       org.opencontainers.image.description="CEF discount watchtower - single image, multi-command CLI"
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    # uv debe usar el Python de la imagen base, jamás descargarse uno propio
+    UV_PYTHON_DOWNLOADS=never \
+    # el cache mount vive en otro filesystem: copiar en vez de hardlink
+    UV_LINK_MODE=copy \
+    # el venv del proyecto por delante: `sentinel` resuelve sin activar nada
+    PATH="/app/.venv/bin:$PATH"
 
 WORKDIR /app
 
-# Todo el repo (filtrado por .dockerignore: sin .env, sin tests, sin .git)
+# CAPA 1 — solo dependencias (decisión #36): se copian ÚNICAMENTE los dos
+# ficheros que las definen y se sincroniza sin instalar el proyecto. La capa
+# solo se reconstruye si cambian pyproject.toml o uv.lock: editar código
+# fuente NO vuelve a instalar pandas. --locked verifica hashes y exige que el
+# lock esté al día con pyproject (build roto > deps silenciosamente distintas).
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-install-project
+
+# CAPA 2 — el código (filtrado por .dockerignore: sin .env, sin tests, sin
+# .git). Cambia a diario; por eso va DESPUÉS de las dependencias.
 COPY . .
 
-# Install EDITABLE (-e) a conciencia: el paquete queda en /app/src/sentinel y
-# config.py resuelve REPO_ROOT=/app, encontrando config/tickers.yaml y
-# db/migrations en las MISMAS rutas relativas que en desarrollo. Con un
-# install normal el código iría a site-packages y esas rutas se romperían.
-# El cache mount de BuildKit conserva los wheels descargados entre builds:
-# cambiar código fuente no vuelve a bajar pandas.
-RUN --mount=type=cache,target=/root/.cache/pip pip install -e .
+# Install EDITABLE a conciencia (comportamiento por defecto de `uv sync` con
+# el propio proyecto): el paquete queda en /app/src/sentinel y config.py
+# resuelve REPO_ROOT=/app, encontrando config/tickers.yaml y db/migrations en
+# las MISMAS rutas relativas que en desarrollo (decisión #15). Con un install
+# normal el código iría a site-packages y esas rutas se romperían.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked
 
 # Nunca root dentro del contenedor: si algo escapa del proceso, que se
 # encuentre un usuario sin privilegios (y K8s podrá exigirlo vía
