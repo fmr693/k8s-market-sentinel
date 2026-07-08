@@ -30,8 +30,16 @@ Plataforma **Kubernetes-nativa** de vigilancia de CEFs (closed-end funds) de cr�
 | 4 | Poller intradía (Deployment con horario de mercado) | ✅ |
 | 5 | Capa gold completa + dashboards Grafana provisionados | ✅ |
 | 5½ | Distribuciones + yield TTM (tabla, vista, CronJob y panel) | ✅ |
-| 6 | Alertas Telegram con reglas declarativas | ⬜ |
-| 7 | Helm, Prometheus, CI a GHCR, ArgoCD | ⬜ |
+| 5¾ | Flecos de Grafana (yield en la tabla del universo, column guide, `$ticker`) | 🔶 |
+| 6 | CI/CD: GitHub Actions → GHCR + lock de dependencias | ⬜ |
+| 7 | GitOps: ArgoCD + SOPS/age | ⬜ |
+| 8 | Alertas Telegram con reglas declarativas + digest diario | ⬜ |
+| 8½ | Backtest de la señal de descuento (¿revierte tras cruzar z-score −2?) | ⬜ |
+| 9 | Prometheus + PVC (observabilidad completa) | ⬜ |
+| 10 | Calidad de dato como framework declarativo | ⬜ |
+| 11 | Helm chart, score opcional, README final con guía de portado | ⬜ |
+
+> **Reencuadre (2026-07-08):** este proyecto no compite en producto financiero — compite en **arquitectura portable**. La tesis CEF es la carga útil demostrativa; el patrón (medallón, ingesta idempotente, config-driven, crash-only, GitOps) es lo que se deja a prueba de bombas y se puede aplicar a cualquier otro dominio de datos.
 
 El detalle vivo de cada decisión (con el porqué y las lecciones aprendidas) está en **[DECISIONS.md](DECISIONS.md)**; el contexto completo del proyecto, en **[PROJECT_BRIEF.md](PROJECT_BRIEF.md)**.
 

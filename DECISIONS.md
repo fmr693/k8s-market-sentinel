@@ -14,7 +14,8 @@
 - ✅ **Fase 5 VALIDADA CONTRA NEON** (2026-07-07 tarde): rol `grafana_ro` creado en Neon (verificado: lee gold, el INSERT falla con InsufficientPrivilege); migración 0005 aplicada; backfill de las 20 stocks (44/44 tickers, ~58k velas nuevas); Grafana verificado por API **en local (compose) y en k3d**: health OK, 2 dashboards aprovisionados, datasource conectado a Neon, queries reales de panel (snapshot: 19 CEFs, 14 en descuento) e intradía en vivo (37-43 tickers en los últimos minutos).
 - ✅ **Mini-fase YIELD completada** (2026-07-07/08): migración 0006 (`silver.distributions` + vista `gold.yield_ttm`), 4º ingestor con el patrón de la casa (19/19 CEFs, 2.113 distribuciones desde 2015), CronJob `ingest-distributions` (23:15), panel "Yield & distributions (TTM)" en CEF Sentinel e imagen **0.4.0** corriendo en k3d. Sanity contra Neon: yields plausibles (crédito ~10-16% sobre precio), FSCO 15,8% precio vs 10,9% NAV (la brecha ES el descuento) y la señal de recorte detecta 4 casos reales (BST el más severo: ritmo actual -29% vs TTM). Verificado end-to-end por la API de Grafana con el rol `grafana_ro` (los default privileges de la decisión #28 cubrieron solos los objetos nuevos).
 - ✅ **Imagen 0.4.0 publicada en GHCR** (2026-07-08): `ghcr.io/fmr693/k8s-market-sentinel:0.4.0` + `latest`, digest `2b6d664f…` idéntico al del build local validado en k3d. Lección de infra del desbloqueo: el PAT era correcto desde el principio — el `docker login` fallaba porque el **pipe de Windows PowerShell 5.1 corrompe la contraseña** (codificación OEM + CRLF final); con `printf '%s' TOKEN | docker login --password-stdin` desde Git Bash (bytes exactos) entró a la primera. Cuando una credencial "correcta" falla, sospechar del transporte antes que del secreto.
-- ➡️ **Siguiente:** runbook `deploy/DEPLOY_UBUNTU.md` en cuanto haya acceso al servidor; fase 6 (alertas Telegram — la señal de recorte ya existe en `gold.yield_ttm`).
+- 🔄 **REENCUADRE ESTRATÉGICO (2026-07-08):** el proyecto no compite en producto financiero (CEFConnect/CEFData ya publican descuentos y z-scores); compite en **arquitectura portable**. La tesis financiera es la carga útil demostrativa; lo que se deja "a prueba de bombas" es el patrón: medallón, ingesta idempotente autorreparable, config-driven, crash-only, dashboards como código, y (nuevo orden) CI/CD y GitOps ANTES que más features de dominio. Roadmap redibujado abajo: las fases 6-7 originales se reordenan y amplían a 6-11.
+- ➡️ **Siguiente:** fase 5¾ (flecos: `intraday_exclude` para ^W5000, variable `$ticker` y annotations en Grafana) y fase 6 (CI en GitHub Actions). Runbook `deploy/DEPLOY_UBUNTU.md` en cuanto haya acceso al servidor (encaja natural tras la fase 7, con ArgoCD).
 
 ## Decisiones (resuelven las 7 dudas abiertas del brief)
 
@@ -73,19 +74,29 @@ Tomadas al implementar la fundación; todas con puerta de escape documentada:
 32. **Bronze pragmático en distribuciones** (misma desviación documentada que el intradía): se guarda solo la serie de dividendos de la ventana, no el OHLC completo — ese ya entra a bronze por el ingestor de precios y duplicarlo solo infla el free tier.
 33. **Panel de yield: el color NO premia el yield alto.** Un 20% puede ser distress, no regalo — pintar de verde "más yield" sería mentir. El gradiente va solo en la tendencia de la distribución (current vs TTM), donde rojo = recortando SÍ es semántica honesta; la descripción del panel remite al z-score de la tabla de arriba. Tabla separada del universo (grano distinto: distribuciones + último precio + último NAV), watchlists desplazadas abajo. CronJob a las 23:15 (precios va a las 23:05; misma fuente, 10 min de separación para no solapar peticiones a Yahoo ni conexiones a Neon).
 
-## Roadmap (fases del brief) con estado
+## Roadmap con estado (redibujado 2026-07-08 bajo la lente "arquitectura portable primero")
+
+Las fases 6-7 originales del brief se reordenan y amplían: CI/CD y GitOps se adelantan (todo lo posterior viaja sobre ellos y desaparece el despliegue manual), el dominio (backtest, score) va al final como escaparate. El razonamiento: no vamos a ser "el mejor servicio financiero" — vamos a hacer la mejor arquitectura posible, portable y aplicable a otros campos, con la tesis CEF como ejemplo vivo que valga la pena.
 
 | Fase | Descripción | Estado |
 |---|---|---|
 | 0 | Decisiones de arquitectura (7 dudas abiertas) | ✅ Hecho |
 | 1 | Fundación: esquema bronze/silver/gold + 4 ingestores (precios, FRED, FX, NAV) con backfill idempotente, fuentes validadas | ✅ Hecho (2026-07-06) |
 | 2 | Contenerización: Dockerfile, `.env.example`, secrets fuera del repo | ✅ Hecho (2026-07-06) |
-| 3 | k3s en Ubuntu: namespace, Secrets, ConfigMap de tickers, CronJobs del carril lento | ✅ Validado en k3d local (2026-07-07); Ubuntu pendiente de GHCR |
+| 3 | k3s en Ubuntu: namespace, Secrets, ConfigMap de tickers, CronJobs del carril lento | ✅ Validado en k3d local (2026-07-07); Ubuntu pendiente de acceso |
 | 4 | Poller intradía: Deployment con lógica de horario de mercado + festivos USA | ✅ Hecho y validado en local + k3d (2026-07-07, mercado abierto) |
 | 5 | Capa gold + Grafana: queries de descuento/z-score/Buffett, dashboards provisionados | ✅ Hecho y validado contra Neon, local + k3d (2026-07-07) |
 | 5½ | Mini-fase yield: distribuciones + `gold.yield_ttm` + panel + CronJob (imagen 0.4.0) | ✅ Hecho y validado en k3d contra Neon (2026-07-07/08) |
-| 6 | Alertas Telegram con reglas declarativas en ConfigMap | ⬜ |
-| 7 | Pulido pro: Helm completo, Prometheus, ArgoCD, CI en GitHub Actions, README con diagrama | ⬜ |
+| 5¾ | Flecos: columnas yield + column guide en la tabla del universo (hecho 2026-07-08); `intraday_exclude` para ^W5000; variable `$ticker` y annotations de recortes en Grafana | 🔶 En curso |
+| 6 | CI/CD: GitHub Actions (tests + build + push a GHCR) + lock de dependencias (`uv lock`) — adelantada para que todas las fases siguientes viajen sobre ella | ⬜ |
+| 7 | GitOps: ArgoCD + SOPS/age (cierra la decisión provisional #7 de secretos) — a partir de aquí el "auto-despliegue" es verdad literal | ⬜ |
+| 8 | Motor de alertas Telegram: reglas declarativas en ConfigMap + digest diario de cierre + alertas puntuales (z-score, recorte `current<TTM`, banda EUR/USD, NAV rancio como alerta de operación). Documentar el descarte de Grafana Alerting | ⬜ |
+| 8½ | Mini-fase backtest de la señal: `gold.signal_backtest` (cruces de z-score → descuento/precio a +1/+3/+6 meses, tasa de acierto) + panel. La muestra crece con cada día de serie acumulada — se documenta como tal | ⬜ |
+| 9 | Observabilidad: Prometheus (`/metrics` en el poller, Pushgateway para CronJobs) + PVC (el trofeo stateful) + antes/después del panel-hueco de Pipeline Health | ⬜ |
+| 10 | Calidad de dato como framework declarativo: checks SQL en config (frescura, huecos, divergencias), panel "Data Quality", degradación automática de `nav_quality`; el cross-check NAV (CEFConnect vs ticker X…X) como primer check | ⬜ |
+| 11 | Carga útil final y portada: Helm chart ("portabilidad = el chart", decisión #5 del brief), score compuesto opcional (documentado como discutible), README definitivo con diagrama, sección "la tesis es intercambiable; la plataforma, no" y guía de portado a otros dominios | ⬜ |
+
+Transversal: runbook `deploy/DEPLOY_UBUNTU.md` en cuanto haya acceso al servidor (idealmente tras la fase 7: ArgoCD se instala allí directamente).
 
 ## Pendientes / a revisar más adelante
 
