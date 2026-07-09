@@ -87,6 +87,26 @@ kubectl -n sentinel get cronjobs   # deben aparecer los 5, SUSPEND=False
 
 (Con ArgoCD —fase 7b— este paso manual desaparece: KSOPS descifra al sincronizar.)
 
+### 4b. (Opcional) Despliegue GitOps con ArgoCD — validado en k3d, decisión #40
+
+En vez del `apply` manual de arriba, dejar que ArgoCD sincronice el clúster
+desde git. Bootstrap una vez por clúster:
+
+```bash
+# 1. ArgoCD
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+# 2. La clave age como Secret (el único secreto fuera de git) + KSOPS en el repo-server
+kubectl -n argocd create secret generic sops-age --from-file=keys.txt=~/.config/sops/age/keys.txt
+kubectl -n argocd patch deployment argocd-repo-server --patch-file deploy/gitops/argocd/repo-server-ksops-patch.yaml
+kubectl -n argocd patch configmap argocd-cm --type merge -p '{"data":{"kustomize.buildOptions":"--enable-alpha-plugins --enable-exec"}}'
+# 3. Las Applications (a partir de aquí, desplegar = hacer commit)
+kubectl apply -f deploy/gitops/argocd/application-sentinel-local.yaml
+```
+
+(Para el Ubuntu habría un `application-sentinel-prod.yaml` análogo apuntando a
+un overlay `deploy/gitops/prod` con `sentinel-env.prod.yaml`.)
+
 ## 5. Migrar el esquema (acción puntual)
 
 ```bash
