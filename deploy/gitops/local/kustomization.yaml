@@ -1,0 +1,16 @@
+# Overlay GitOps del entorno LOCAL (k3d) — lo que sincroniza ArgoCD (fase 7b).
+#
+# ¿Por qué un overlay y no apuntar ArgoCD a la raíz? Porque el descifrado de
+# secretos (generator de KSOPS, abajo) requiere plugins de kustomize
+# (--enable-alpha-plugins --enable-exec) que el kubectl de un humano no tiene.
+# La raíz queda "plugin-free" (el flujo manual `kubectl apply -k .` sigue
+# funcionando igual que siempre) y ESTE overlay añade la pieza que solo el
+# repo-server de ArgoCD sabe ejecutar. Un overlay por entorno: local / prod.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../.. # el despliegue completo de la raíz (namespace, CronJobs, poller, Grafana)
+
+generators:
+  - ksops-secrets.yaml # descifra deploy/secrets/sentinel-env.local.yaml al sincronizar

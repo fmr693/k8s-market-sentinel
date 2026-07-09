@@ -1,0 +1,52 @@
+# Patch del repo-server de ArgoCD para que sepa descifrar SOPS (fase 7b).
+#
+# Tres piezas:
+#  1. initContainer: copia los binarios `ksops` y `kustomize` (de la imagen
+#     oficial de KSOPS) a un volumen compartido — el repo-server usa ESE
+#     kustomize, con soporte de plugins exec.
+#  2. La clave age entra como volumen desde el Secret `sops-age` (creado a
+#     mano UNA vez por clúster: el único secreto fuera de git, decisión #39)
+#     y se anuncia vía SOPS_AGE_KEY_FILE.
+#  3. Va acompañado del ConfigMap argocd-cm: kustomize.buildOptions =
+#     "--enable-alpha-plugins --enable-exec" (los generators exec están
+#     desactivados por defecto: ejecutar binarios durante un build es un
+#     privilegio que se concede explícitamente).
+#
+# Bootstrap (una vez por clúster, ver runbook):
+#   kubectl -n argocd create secret generic sops-age --from-file=keys.txt=<clave age>
+#   kubectl -n argocd patch deployment argocd-repo-server --patch-file deploy/gitops/argocd/repo-server-ksops-patch.yaml
+#   kubectl -n argocd patch configmap argocd-cm --type merge -p '{"data":{"kustomize.buildOptions":"--enable-alpha-plugins --enable-exec"}}'
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: install-ksops
+          # Desde v4.4.0 la imagen es distroless (sin /bin/sh): la receta
+          # clásica de shell muere con "stat /bin/sh: no such file". El
+          # subcomando `ksops install` (v4.5+) copia los binarios él mismo.
+          image: viaductoss/ksops:v4.5.1
+          command: ["/usr/local/bin/ksops", "install", "/custom-tools", "--with-kustomize"]
+          volumeMounts:
+            - mountPath: /custom-tools
+              name: custom-tools
+      containers:
+        - name: argocd-repo-server
+          env:
+            - name: SOPS_AGE_KEY_FILE
+              value: /sops-age/keys.txt
+          volumeMounts:
+            - mountPath: /usr/local/bin/kustomize
+              name: custom-tools
+              subPath: kustomize
+            - mountPath: /usr/local/bin/ksops
+              name: custom-tools
+              subPath: ksops
+            - mountPath: /sops-age
+              name: sops-age
+              readOnly: true
+      volumes:
+        - name: custom-tools
+          emptyDir: {}
+        - name: sops-age
+          secret:
+            secretName: sops-age

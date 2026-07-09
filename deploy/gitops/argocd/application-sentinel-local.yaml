@@ -1,0 +1,28 @@
+# La Application de ArgoCD: el contrato GitOps del entorno local (fase 7b).
+#
+# "Lo que diga deploy/gitops/local en la rama main de ESTE repo es el estado
+# deseado del clúster." El agente lo comprueba continuamente y reconcilia:
+#   - automated + prune: lo que desaparece de git desaparece del clúster.
+#   - selfHeal: si alguien toca el clúster a mano, ArgoCD lo revierte —
+#     la "regeneración automática" aplicada también al DESPLIEGUE.
+#
+# Bootstrap (una vez): kubectl apply -f deploy/gitops/argocd/application-sentinel-local.yaml
+# Desde ese momento, desplegar = hacer commit. No hay más kubectl.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sentinel-local
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/fmr693/k8s-market-sentinel.git
+    targetRevision: main
+    path: deploy/gitops/local
+  destination:
+    server: https://kubernetes.default.svc # el propio clúster donde vive ArgoCD
+    namespace: sentinel
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
