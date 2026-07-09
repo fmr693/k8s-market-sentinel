@@ -1,10 +1,13 @@
-# La Application de ArgoCD: el contrato GitOps del entorno local (fase 7b).
+# Las Applications de ArgoCD: el contrato GitOps del entorno local (fase 7b).
 #
-# "Lo que diga deploy/gitops/local en la rama main de ESTE repo es el estado
-# deseado del clúster." El agente lo comprueba continuamente y reconcilia:
-#   - automated + prune: lo que desaparece de git desaparece del clúster.
-#   - selfHeal: si alguien toca el clúster a mano, ArgoCD lo revierte —
-#     la "regeneración automática" aplicada también al DESPLIEGUE.
+# DOS documentos (ver deploy/gitops/local/kustomization.yaml para el porqué del
+# reparto):
+#   - sentinel-local: la APP (raíz plugin-free) — namespace, CronJobs, poller,
+#     Grafana, ConfigMaps.
+#   - sentinel-local-secrets: SOLO el Secret, descifrado por KSOPS.
+# Ambas con automated+prune+selfHeal: lo que se va de git se va del clúster, y
+# si alguien toca el clúster a mano ArgoCD lo revierte — la "regeneración
+# automática" aplicada también al DESPLIEGUE.
 #
 # Bootstrap (una vez): kubectl apply -f deploy/gitops/argocd/application-sentinel-local.yaml
 # Desde ese momento, desplegar = hacer commit. No hay más kubectl.
@@ -18,9 +21,30 @@ spec:
   source:
     repoURL: https://github.com/fmr693/k8s-market-sentinel.git
     targetRevision: main
-    path: deploy/gitops/local
+    path: . # la raíz: todo el despliegue de la app, sin plugins
   destination:
-    server: https://kubernetes.default.svc # el propio clúster donde vive ArgoCD
+    server: https://kubernetes.default.svc
+    namespace: sentinel
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sentinel-local-secrets
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/fmr693/k8s-market-sentinel.git
+    targetRevision: main
+    path: deploy/gitops/local # solo el Secret, vía KSOPS
+  destination:
+    server: https://kubernetes.default.svc
     namespace: sentinel
   syncPolicy:
     automated:
