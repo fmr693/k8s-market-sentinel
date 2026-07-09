@@ -59,24 +59,33 @@ sudo k3s kubectl get nodes    # el nodo en Ready
 - Nota: el Ubuntu moderno ya usa cgroup v2 — la lección de WSL2
   (`cgroup_no_v1`) NO aplica aquí.
 
-## 3. Llevar el repo y los secretos al servidor
+## 3. Llevar el repo y LA CLAVE age al servidor
 
 ```bash
 git clone https://github.com/fmr693/k8s-market-sentinel.git
 cd k8s-market-sentinel
 ```
 
-El `.env` **no viaja por git** (está en .gitignore, a propósito). Crearlo a
-mano en la raíz del repo clonado, con los mismos valores que en desarrollo
-(plantilla: `.env.example`; los valores, del gestor de contraseñas o de la
-consola de Neon/FRED). Comprobar permisos: `chmod 600 .env`.
+Desde la fase 7a (decisión #39) los secretos **SÍ viajan por git — cifrados**
+(`deploy/secrets/`, SOPS + age). Lo único que hay que llevar a mano es la
+**clave privada age** (1 fichero, desde el gestor de contraseñas):
+
+```bash
+sudo apt-get install -y age    # sops: bajar el binario de releases de getsops/sops
+mkdir -p ~/.config/sops/age
+# pegar la clave en ~/.config/sops/age/keys.txt   (la ruta estándar de SOPS)
+chmod 600 ~/.config/sops/age/keys.txt
+```
 
 ## 4. Desplegar
 
 ```bash
-kubectl apply -k .                 # namespace + ConfigMap + Secret + 4 CronJobs
-kubectl -n sentinel get cronjobs   # deben aparecer los 4, SUSPEND=False
+kubectl apply -k .                 # namespace + ConfigMaps + CronJobs + poller + Grafana
+sops -d deploy/secrets/sentinel-env.prod.yaml | kubectl apply -f -   # el Secret, descifrado al vuelo
+kubectl -n sentinel get cronjobs   # deben aparecer los 5, SUSPEND=False
 ```
+
+(Con ArgoCD —fase 7b— este paso manual desaparece: KSOPS descifra al sincronizar.)
 
 ## 5. Migrar el esquema (acción puntual)
 

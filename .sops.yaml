@@ -1,0 +1,21 @@
+# Política de cifrado de SOPS (fase 7a, cierra la decisión #7 del brief).
+#
+# Regla: todo YAML bajo deploy/secrets/ se cifra para la clave age del
+# proyecto. SOPS cifra SOLO los valores (encrypted_regex): la estructura del
+# manifiesto sigue siendo legible en el repo y los diffs de git tienen
+# sentido ("se añadió TELEGRAM_BOT_TOKEN"), pero cada valor es AES-256.
+#
+# La clave PRIVADA age es el ÚNICO secreto que vive fuera de git:
+#   - en cada máquina de desarrollo: %APPDATA%\sops\age\keys.txt (Windows)
+#     o ~/.config/sops/age/keys.txt (Linux) — la ruta estándar de SOPS.
+#   - en el clúster (fase 7b): un Secret que monta el repo-server de ArgoCD
+#     para que KSOPS descifre al sincronizar.
+# Perder esa clave = re-cifrar los secretos con una nueva (los datos de
+# Neon no se pierden: la clave solo protege las credenciales, no los datos).
+creation_rules:
+  # Separador [/\\]: en Windows sops evalúa la ruta con backslashes
+  - path_regex: deploy[/\\]secrets[/\\].*\.yaml$
+    # Solo se cifran data/stringData: los metadatos del Secret (nombre,
+    # namespace, tipo) quedan legibles — kustomize/ArgoCD los necesitan.
+    encrypted_regex: ^(data|stringData)$
+    age: age1gqgan8hkr7469fpdwsddhx9qnhsmmxdvgm2v5f38twsntvus3gns5200tf

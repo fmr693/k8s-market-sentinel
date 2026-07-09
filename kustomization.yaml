@@ -2,16 +2,17 @@
 #
 # ¿Por qué en la raíz y no en deploy/k8s/? Porque kustomize, por seguridad,
 # se niega a leer ficheros FUERA de su directorio (LoadRestrictionsRootOnly),
-# y los generadores de abajo necesitan config/tickers.yaml y .env. Desde la
+# y los generadores de abajo necesitan config/tickers.yaml. Desde la
 # raíz, todo queda "debajo" y no hay que duplicar ficheros.
 #
 # Los generadores son la clave del diseño config-driven:
 # - El ConfigMap del universo se GENERA desde config/tickers.yaml: una sola
 #   fuente de verdad — editas el YAML, re-aplicas, y el ConfigMap se
 #   actualiza. Nada de mantener dos copias sincronizadas a mano.
-# - El Secret se GENERA desde .env (que está en .gitignore): los secretos
-#   llegan al clúster sin pisar jamás el repo. En la fase GitOps esto se
-#   sustituirá por SOPS+age (decisión #7, provisional).
+# - El Secret ya NO se genera desde .env (fase 7a, decisión #39): vive
+#   CIFRADO en el repo (deploy/secrets/, SOPS+age — cierra la decisión #7).
+#   Pre-ArgoCD se aplica con: sops -d deploy/secrets/<entorno>.yaml | kubectl apply -f -
+#   Con ArgoCD (fase 7b), KSOPS lo descifra solo al sincronizar.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -53,11 +54,6 @@ configMapGenerator:
       - deploy/grafana/dashboards/cef-sentinel.json
       - deploy/grafana/dashboards/cef-charts.json
       - deploy/grafana/dashboards/pipeline-health.json
-
-secretGenerator:
-  - name: sentinel-env
-    envs:
-      - .env
 
 generatorOptions:
   # Nombres estables (sin sufijo-hash): nuestros consumidores son Jobs que
