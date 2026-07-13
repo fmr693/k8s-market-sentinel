@@ -24,3 +24,13 @@ scrape_configs:
   - job_name: poller
     static_configs:
       - targets: ["poller-metrics:8000"]
+
+  # Pushgateway (fase 9, commit 3): el buzón de los jobs batch (los 5 CronJobs
+  # de ingesta empujan al salir). honor_labels: true → el label 'job' que puso
+  # el pusher (p.ej. `ingest-prices`) GANA al `job: pushgateway` del scrape; sin
+  # esto todas las métricas empujadas caerían bajo un único job y no se
+  # distinguiría el ingestor. Es el patrón canónico del Pushgateway.
+  - job_name: pushgateway
+    honor_labels: true
+    static_configs:
+      - targets: ["pushgateway:9091"]

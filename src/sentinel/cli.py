@@ -12,11 +12,12 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import signal
 import sys
 import threading
 
-from prometheus_client import start_http_server
+from prometheus_client import CollectorRegistry, Gauge, push_to_gateway, start_http_server
 
 from . import db, poller
 from .config import load_universe
@@ -28,7 +29,45 @@ from .ingest.prices import ingest_daily_prices
 from .migrations import apply_migrations
 
 
-def _print_ingest_summary(result: dict[str, int], unit: str) -> int:
+log = logging.getLogger(__name__)
+
+
+def _push_ingest_metrics(job: str, result: dict[str, int]) -> None:
+    """Empuja las métricas de la ejecución al Pushgateway (fase 9, decisión #43).
+
+    Patrón batch: el CronJob muere antes de que Prometheus pueda scrapearlo, así
+    que empuja al salir. Gateado por PUSHGATEWAY_URL: ausente (dev local) = no-op
+    y degrada solo — mismo patrón que `intraday_exclude` (#34). Best-effort: un
+    Pushgateway caído NO tumba la ingesta. Registro EFÍMERO propio (no arrastra
+    el registro global del poller); `push_to_gateway` REEMPLAZA el grupo del job,
+    por eso siempre se empuja el mismo set de series.
+    """
+    gateway = os.environ.get("PUSHGATEWAY_URL")
+    if not gateway:
+        return
+    registry = CollectorRegistry()
+    Gauge(
+        "sentinel_ingest_last_run_timestamp_seconds",
+        "Epoch del fin de la última ejecución de este job (frescura)",
+        registry=registry,
+    ).set_to_current_time()
+    Gauge(
+        "sentinel_ingest_rows",
+        "Filas ingestadas en la última ejecución (suma de las fuentes OK)",
+        registry=registry,
+    ).set(sum(n for n in result.values() if n >= 0))
+    Gauge(
+        "sentinel_ingest_sources_failed",
+        "Nº de fuentes con error en la última ejecución",
+        registry=registry,
+    ).set(sum(1 for n in result.values() if n < 0))
+    try:
+        push_to_gateway(gateway, job=job, registry=registry)
+    except OSError as exc:
+        log.warning("Pushgateway inalcanzable (%s): %s", gateway, exc)
+
+
+def _print_ingest_summary(result: dict[str, int], unit: str, job: str) -> int:
     """Resumen común de ingesta + exit code (≠0 si algo falló, para los Jobs de K8s)."""
     errors = [k for k, n in result.items() if n < 0]
     ok = {k: n for k, n in result.items() if n >= 0}
@@ -37,6 +76,7 @@ def _print_ingest_summary(result: dict[str, int], unit: str) -> int:
         print(f"  {key:14s} {n:6d} {unit}")
     if errors:
         print("  ERRORES:", ", ".join(errors))
+    _push_ingest_metrics(job, result)
     return 1 if errors else 0
 
 
@@ -121,19 +161,19 @@ def main(argv: list[str] | None = None) -> int:
         universe = load_universe()
         with db.connect() as conn:
             result = ingest_daily_prices(conn, universe, args.tickers)
-        return _print_ingest_summary(result, "velas")
+        return _print_ingest_summary(result, "velas", args.command)
 
     if args.command == "ingest-macro":
         universe = load_universe()
         with db.connect() as conn:
             result = ingest_macro_series(conn, universe, args.series)
-        return _print_ingest_summary(result, "observaciones")
+        return _print_ingest_summary(result, "observaciones", args.command)
 
     if args.command == "ingest-fx":
         universe = load_universe()
         with db.connect() as conn:
             result = ingest_fx_rates(conn, universe, args.pairs)
-        return _print_ingest_summary(result, "fixings")
+        return _print_ingest_summary(result, "fixings", args.command)
 
     if args.command == "poller":
         # El Event + el manejador de señales viven AQUÍ (capa de proceso);
@@ -154,13 +194,13 @@ def main(argv: list[str] | None = None) -> int:
         universe = load_universe()
         with db.connect() as conn:
             result = ingest_distributions(conn, universe, args.tickers)
-        return _print_ingest_summary(result, "distribuciones")
+        return _print_ingest_summary(result, "distribuciones", args.command)
 
     if args.command == "ingest-nav":
         universe = load_universe()
         with db.connect() as conn:
             result = ingest_navs(conn, universe, args.tickers)
-        return _print_ingest_summary(result, "NAVs")
+        return _print_ingest_summary(result, "NAVs", args.command)
 
     return 2  # unreachable con required=True
 

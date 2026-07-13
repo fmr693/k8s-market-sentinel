@@ -28,6 +28,7 @@ resources:
   - deploy/k8s/deployment-poller.yaml
   - deploy/k8s/grafana.yaml
   - deploy/k8s/prometheus.yaml
+  - deploy/k8s/pushgateway.yaml
 
 # Transformador de imagen: los manifests de deploy/k8s/ referencian el nombre
 # neutro `sentinel:dev` (el que usa el flujo local con `k3d image import`);
@@ -37,6 +38,22 @@ images:
   - name: sentinel
     newName: ghcr.io/fmr693/k8s-market-sentinel
     newTag: "0.5.0"
+
+# El PUSHGATEWAY_URL de los CronJobs (fase 9, commit 3) se inyecta AQUÍ, en un
+# único sitio, para los 5 a la vez (mismo criterio DRY que el transformador de
+# imagen de arriba): un patch que apunta a todo `kind: CronJob` y añade la env
+# var a su contenedor. El poller (Deployment) NO lo recibe: usa pull (/metrics),
+# no push. En un entorno sin este patch los ingestores no empujan y degradan
+# solo (el push está gateado por la env, ausente = no-op).
+patches:
+  - target:
+      kind: CronJob
+    patch: |-
+      - op: add
+        path: /spec/jobTemplate/spec/template/spec/containers/0/env/-
+        value:
+          name: PUSHGATEWAY_URL
+          value: http://pushgateway:9091
 
 configMapGenerator:
   - name: sentinel-tickers
