@@ -1,7 +1,7 @@
 {
   "title": "Pipeline Health",
   "uid": "pipeline-health",
-  "description": "Operations dashboard: data freshness per source, ingest activity and NAV quality. SQL-over-Neon for now; process metrics (poller ticks, errors, durations) arrive with Prometheus in phase 7.",
+  "description": "Operations dashboard: data freshness per source, ingest activity and NAV quality (SQL over Neon), plus process metrics (poller + ingest jobs) from Prometheus (phase 9).",
   "tags": ["sentinel", "ops"],
   "schemaVersion": 39,
   "editable": true,
@@ -255,13 +255,128 @@
       "fieldConfig": { "defaults": {}, "overrides": [] }
     },
     {
-      "id": 10,
-      "type": "text",
-      "title": "Coming in phase 7: process metrics",
+      "id": 11,
+      "type": "timeseries",
+      "title": "Poller - tick & failure rate (Prometheus)",
+      "description": "The poller's pulse from PROCESS metrics (not Neon). Rates fall to ~0 while the market is closed (the poller sleeps). Needs image 0.6.0+ (prometheus_client); empty otherwise.",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "rate(sentinel_poller_ticks_total[5m])", "legendFormat": "ticks/s" },
+        { "refId": "B", "expr": "rate(sentinel_poller_tick_failures_total[5m])", "legendFormat": "failures/s" }
+      ],
       "options": {
-        "mode": "markdown",
-        "content": "This dashboard reads **data freshness from Neon** (every silver table carries `ingested_at`).\n\nWhat it *cannot* see - and Prometheus will add in **phase 7**:\n\n- poller ticks, errors and consecutive-failure counts\n- job durations and exit codes over time\n- container memory / CPU / restarts\n- scrape-level detail per source\n\nUntil then: `kubectl -n sentinel get pods` and the pod logs are the source of process truth."
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 15, "lineWidth": 1 },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "failures/s" },
+            "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } } ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Poller - consecutive failures",
+      "description": "Current run of consecutive tick failures. The poller crashes on purpose (and K8s restarts it, maybe on a healthier node) at 30.",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "refId": "A", "expr": "sentinel_poller_consecutive_failures", "instant": true } ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 20 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "Poller - market",
+      "description": "1 = XNYS open, 0 = closed. Explains why the tick rate and freshness age overnight and on weekends.",
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "refId": "A", "expr": "sentinel_market_open", "instant": true } ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": { "text": "Open", "color": "green", "index": 0 },
+                "0": { "text": "Closed", "color": "blue", "index": 1 }
+              }
+            }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "text", "value": null } ] }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Poller - since last tick",
+      "description": "Seconds since the last successful tick. Ages legitimately overnight and over weekends (the poller sleeps when the market is closed) - red only past a full weekend.",
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "refId": "A", "expr": "time() - sentinel_poller_last_tick_timestamp_seconds", "instant": true } ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "value" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 14400 },
+              { "color": "red", "value": 259200 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 15,
+      "type": "bargauge",
+      "title": "Ingest jobs - hours since last run",
+      "description": "Per CronJob, pushed to the Pushgateway (sentinel_ingest_last_run_timestamp_seconds). One bar per ingestor; empty until each has run at least once. Yellow past ~1 missed nightly run, red past 2.",
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "refId": "A", "expr": "(time() - sentinel_ingest_last_run_timestamp_seconds) / 3600", "legendFormat": "{{job}}", "instant": true } ],
+      "options": { "orientation": "horizontal", "displayMode": "gradient", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 30 },
+              { "color": "red", "value": 78 }
+            ]
+          }
+        },
+        "overrides": []
       }
     }
   ]

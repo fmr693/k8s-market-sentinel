@@ -64,6 +64,7 @@ configMapGenerator:
   - name: grafana-provisioning-datasources
     files:
       - neon.yaml=deploy/grafana/datasource-neon.yaml
+      - prometheus.yaml=deploy/grafana/datasource-prometheus.yaml
   - name: grafana-provisioning-dashboards
     files:
       - provider.yaml=deploy/grafana/dashboards-provider.yaml

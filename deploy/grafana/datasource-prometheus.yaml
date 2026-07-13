@@ -1,0 +1,17 @@
+# Datasource de Prometheus aprovisionado como código (fase 9, commit 4).
+#
+# A diferencia del de Neon, NO lleva credenciales: Prometheus es infra interna
+# sin auth, se llega por DNS in-cluster. La URL es fija (http://prometheus:9090,
+# igual en k3d local y en el k3s del Ubuntu) → sin $__env{...}. isDefault se
+# queda en Neon; este es secundario. En el compose de dev NO hay Prometheus, así
+# que este datasource solo lo usan los paneles de pipeline-health corriendo en k8s.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus # los paneles de pipeline-health referencian este uid
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: false
+    editable: false # la verdad vive en el repo, no en la UI
