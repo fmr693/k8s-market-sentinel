@@ -255,7 +255,7 @@
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT s.ticker AS \"CEF\", s.price AS \"Price\", s.nav AS \"NAV\", s.nav_date AS \"NAV date\", s.nav_quality AS \"NAV quality\", round(s.premium_discount * 100, 2) AS \"Prem/Disc %\", s.estado AS \"Status\", round(y.yield_ttm_on_price_pct, 2) AS \"Yield %\", y.n_dist_ttm AS \"Payments/yr\", round(s.zscore::numeric, 2) AS \"Z-score\", s.n_obs AS \"Obs (1y)\", s.zscore_date AS \"Z-score date\" FROM gold.cef_snapshot s LEFT JOIN gold.yield_ttm y ON y.ticker = s.ticker ORDER BY s.zscore ASC NULLS LAST"
+          "rawSql": "SELECT s.ticker AS \"CEF\", s.price AS \"Price\", s.nav AS \"NAV\", s.nav_date AS \"NAV date\", s.nav_quality AS \"NAV quality\", round(s.premium_discount * 100, 2) AS \"Prem/Disc %\", s.estado AS \"Status\", round(y.yield_ttm_on_price_pct, 2) AS \"Yield %\", y.n_dist_ttm AS \"Payments/yr\", round(s.zscore::numeric, 2) AS \"Z-score\", s.n_obs AS \"Obs (1y)\", s.zscore_date AS \"Z-score date\", s.zscore_band AS \"Signal\" FROM gold.cef_snapshot s LEFT JOIN gold.yield_ttm y ON y.ticker = s.ticker ORDER BY s.zscore ASC NULLS LAST"
         }
       ],
       "options": {
@@ -545,8 +545,200 @@
                 "value": 2
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Signal"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "historicamente_barato": {
+                        "text": "🟢 Historically cheap",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "mas_barato_de_lo_normal": {
+                        "text": "🔵 Cheaper than usual",
+                        "color": "blue",
+                        "index": 1
+                      },
+                      "normal": {
+                        "text": "⚪ Normal",
+                        "color": "text",
+                        "index": 2
+                      },
+                      "mas_caro_de_lo_normal": {
+                        "text": "🟠 Pricier than usual",
+                        "color": "orange",
+                        "index": 3
+                      },
+                      "historicamente_caro": {
+                        "text": "🔴 Historically rich",
+                        "color": "red",
+                        "index": 4
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
           }
         ]
+      }
+    },
+    {
+      "id": 20,
+      "type": "table",
+      "title": "Signal backtest - what happened after z-score crossed below -2",
+      "description": "For each historical crossing of z-score <= -2 (with >=126 obs), the discount reversion and price move at +1/+3/+6 months. Read with the caveat panel: the sample is dominated by the 2026-03 credit sell-off.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 44
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT horizon_months AS \"Horizon (months)\", n_signals_realized AS \"Signals (matured)\", n_signals_total AS \"Signals (total)\", round(reversion_hit_rate * 100, 1) AS \"Discount reverted %\", round(price_up_hit_rate * 100, 1) AS \"Price up %\", round(avg_price_return * 100, 2) AS \"Avg price return %\" FROM gold.signal_backtest_summary ORDER BY horizon_months"
+        }
+      ],
+      "options": {
+        "sortBy": []
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Discount reverted %"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-RdYlGr"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Price up %"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-RdYlGr"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Avg price return %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 21,
+      "type": "text",
+      "title": "How to read the backtest (honest caveats)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 44
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Thesis under test:** when a CEF's discount becomes anomalously wide (z-score crosses below **-2**), does the discount *revert* (narrow) and the *price* rise over the next 1 / 3 / 6 months?\n\n- **Discount reverted %** / **Price up %** = share of *matured* signals where it happened.\n- **Sampling caveat:** so far ~half the signals come from the **2026-03 credit sell-off**, where nearly the whole universe crossed -2 at once and rebounded together. Those are **correlated**, not independent - a high hit rate today reflects *one episode*, not a proven edge.\n- **+6m has not matured yet** (needs 6 months of forward data). The sample grows with every accumulated trading day.\n- *Mechanical note:* a z-score is a deviation from a 1-year moving average, so some reversion is built in. **Price return** is the more independent signal."
       }
     },
     {
