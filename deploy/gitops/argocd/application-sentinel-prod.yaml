@@ -1,0 +1,51 @@
+# Las Applications de ArgoCD del entorno PROD (Neon).
+#
+# Espejo de application-sentinel-local.yaml (ver allí el porqué de las DOS
+# Applications). La diferencia: sentinel-prod-secrets apunta a deploy/gitops/prod
+# (descifra sentinel-env.prod.yaml = Neon) en vez de deploy/gitops/local.
+# La raíz (sentinel-prod, path '.') es la MISMA app env-agnostic.
+#
+# IMPORTANTE: no bootstrapear a la vez que las Applications 'local' — ambas
+# gestionarían los mismos recursos del namespace sentinel. Un entorno por
+# clúster: aquí, Neon.
+#
+# Bootstrap (una vez): kubectl apply -f deploy/gitops/argocd/application-sentinel-prod.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sentinel-prod
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/fmr693/k8s-market-sentinel.git
+    targetRevision: main
+    path: . # la raíz: todo el despliegue de la app, sin plugins
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: sentinel
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sentinel-prod-secrets
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/fmr693/k8s-market-sentinel.git
+    targetRevision: main
+    path: deploy/gitops/prod # solo el Secret (Neon), vía KSOPS
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: sentinel
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

@@ -1,0 +1,13 @@
+# Overlay GitOps del entorno PROD (Neon): SOLO el secreto descifrado.
+#
+# Espejo de deploy/gitops/local/kustomization.yaml (ver allí el porqué del
+# reparto en DOS Applications). La única diferencia entre entornos es QUÉ
+# secreto se descifra: aquí, sentinel-env.prod.yaml (Neon, base neondb).
+# La raíz (la app) es idéntica y env-agnostic — solo cambia el Secret.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: sentinel
+
+generators:
+  - ksops-secrets.yaml # descifra deploy/secrets/sentinel-env.prod.yaml al sincronizar
