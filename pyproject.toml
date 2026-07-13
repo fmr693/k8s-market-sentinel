@@ -15,6 +15,10 @@ dependencies = [
     # Calendario bursátil XNYS (fase 4, decisión 4.1): festivos con reglas
     # móviles, medias sesiones y DST bien hecho. Encapsulada en market_hours.py.
     "exchange-calendars>=4.5",
+    # Métricas Prometheus (fase 9): el poller expone /metrics (modelo pull) y
+    # los ingestores empujan al Pushgateway. Registro global + un HTTP server
+    # en hilo daemon; cero dependencias transitivas pesadas.
+    "prometheus-client>=0.20",
 ]
 
 [project.optional-dependencies]

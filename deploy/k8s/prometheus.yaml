@@ -1,0 +1,122 @@
+# Prometheus (fase 9): la observabilidad de PROCESO que el SQL-sobre-Neon no ve
+# (ticks, fallos, filas por job, frescura). Y su TSDB es EL PRIMER estado
+# cluster-local del proyecto — "el trofeo stateful": todo lo demás se externaliza
+# a Neon; esto no (y por eso NO sobrevive a un teardown del clúster: son métricas
+# operativas, es aceptable). Desplegado "a pelo" (Deployment + ConfigMap + PVC),
+# sin Operator ni kube-prometheus-stack: mismo criterio que SQL-sin-ORM y
+# kustomize-sin-Helm — se ve exactamente qué corre. Escape: el Operator si crece.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: k8s-market-sentinel
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+  # Sin storageClassName: usa la default del clúster (local-path en k3d y en el
+  # k3s del Ubuntu) → portable, el criterio rector del proyecto. 2Gi sobra:
+  # 2-3 targets a 30s con retención de 15d ocupan muy por debajo de 1Gi.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: k8s-market-sentinel
+spec:
+  replicas: 1
+  # Recreate y no RollingUpdate: 1 réplica monta 1 PVC ReadWriteOnce; rolling
+  # levantaría el pod nuevo antes de soltar el viejo → los dos peleando por el
+  # mismo volumen. Mismo razonamiento que el poller (decisión #24).
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: prometheus
+        app.kubernetes.io/part-of: k8s-market-sentinel
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534 # 'nobody', el usuario por defecto de prom/prometheus
+        runAsGroup: 65534
+        # EL GOTCHA (hermano del uid-1000 numérico de la decisión #19): un PVC
+        # nace propiedad de root. Sin fsGroup, 'nobody' no puede escribir la
+        # TSDB en /prometheus → CrashLoop. fsGroup marca el volumen como del
+        # grupo 65534 (Kubernetes se lo aplica al montarlo).
+        fsGroup: 65534
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v3.5.0 # línea LTS; bump editando aquí
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            # Retención acotada: el PVC nunca se llena solo (poda automática).
+            - --storage.tsdb.retention.time=15d
+            # Permite recargar la config con POST /-/reload sin reiniciar el pod
+            # (cómodo al añadir scrape jobs en los commits 2-3). Fallback
+            # crash-only: borrar el pod y renace releyendo la config — la TSDB
+            # persiste en el PVC.
+            - --web.enable-lifecycle
+          ports:
+            - containerPort: 9090
+              name: http
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+              readOnly: true
+            - name: data
+              mountPath: /prometheus
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9090
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9090
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config # generado por kustomize desde deploy/prometheus/prometheus.yml
+        - name: data
+          persistentVolumeClaim:
+            claimName: prometheus-data
+---
+# ClusterIP (no NodePort): Prometheus es infra interna; a su UI se llega por
+# `kubectl port-forward svc/prometheus 9090`. Grafana (fase 9, commit 4) lo
+# consultará por DNS in-cluster: http://prometheus:9090.
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: k8s-market-sentinel
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 9090

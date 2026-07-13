@@ -27,6 +27,7 @@ resources:
   - deploy/k8s/cronjob-distributions.yaml
   - deploy/k8s/deployment-poller.yaml
   - deploy/k8s/grafana.yaml
+  - deploy/k8s/prometheus.yaml
 
 # Transformador de imagen: los manifests de deploy/k8s/ referencian el nombre
 # neutro `sentinel:dev` (el que usa el flujo local con `k3d image import`);
@@ -54,6 +55,13 @@ configMapGenerator:
       - deploy/grafana/dashboards/cef-sentinel.json
       - deploy/grafana/dashboards/cef-charts.json
       - deploy/grafana/dashboards/pipeline-health.json
+  # Config de Prometheus (fase 9): mismo patrón config-driven — la verdad vive
+  # en deploy/prometheus/prometheus.yml y el ConfigMap se genera desde ahí.
+  # Nombre estable (disableNameSuffixHash) → el volumen del Deployment lo
+  # referencia como 'prometheus-config' sin adivinar sufijos.
+  - name: prometheus-config
+    files:
+      - prometheus.yml=deploy/prometheus/prometheus.yml
 
 generatorOptions:
   # Nombres estables (sin sufijo-hash): nuestros consumidores son Jobs que

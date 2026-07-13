@@ -16,6 +16,8 @@ import signal
 import sys
 import threading
 
+from prometheus_client import start_http_server
+
 from . import db, poller
 from .config import load_universe
 from .ingest.distributions import ingest_distributions
@@ -140,6 +142,11 @@ def main(argv: list[str] | None = None) -> int:
         stop = threading.Event()
         for sig in (signal.SIGTERM, signal.SIGINT):
             signal.signal(sig, lambda *_: stop.set())
+        # /metrics para Prometheus (fase 9): servidor HTTP en un hilo daemon.
+        # Vive AQUÍ (capa de proceso) y no en run(): abrir el socket es un
+        # efecto de proceso, y así el bucle se testea sin puertos. El hilo
+        # daemon muere con el proceso; no interfiere con la salida por SIGTERM.
+        start_http_server(poller.METRICS_PORT)
         poller.run(stop, load_universe())
         return 0
 

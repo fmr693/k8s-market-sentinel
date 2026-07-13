@@ -34,6 +34,11 @@ spec:
           image: sentinel:dev # ← kustomization lo reescribe a la imagen GHCR
           imagePullPolicy: IfNotPresent
           args: ["poller"]
+          ports:
+            # /metrics para Prometheus (fase 9). El poller es un proceso vivo →
+            # modelo pull; el Service poller-metrics (abajo) publica este puerto.
+            - containerPort: 8000
+              name: metrics
           envFrom:
             - secretRef:
                 name: sentinel-env
@@ -58,6 +63,10 @@ spec:
           # máxima + margen), el bucle está colgado: matar y reiniciar
           # (gap-fill mediante). El zombi se cura solo.
           # `find` sale con 1 si el fichero no existe o no cumple el filtro.
+          # NO migramos la liveness al /metrics del 8000 (aunque la decisión #24
+          # lo dejó como opción): ese endpoint lo sirve un hilo daemon aparte y
+          # respondería 200 aunque el BUCLE esté colgado → peor detector de
+          # zombis que el latido, que sí está acoplado al progreso del bucle.
           livenessProbe:
             exec:
               command: ["find", "/tmp/heartbeat", "-newermt", "-20 minutes"]
@@ -71,3 +80,24 @@ spec:
         - name: tickers
           configMap:
             name: sentinel-tickers
+---
+# Service SOLO para que Prometheus scrapee el /metrics del poller (fase 9).
+# Matiz de la decisión #24: el poller "no recibía tráfico de nadie" y por eso no
+# tenía Service; el scrape ES tráfico, así que ahora sí — pero ClusterIP e
+# interno, y SIGUE sin readinessProbe (1 réplica; un target caído lo marca
+# Prometheus, no hay enrutado que decidir).
+apiVersion: v1
+kind: Service
+metadata:
+  name: poller-metrics
+  labels:
+    app.kubernetes.io/name: poller
+    app.kubernetes.io/part-of: k8s-market-sentinel
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: poller
+  ports:
+    - name: metrics
+      port: 8000
+      targetPort: 8000

@@ -36,7 +36,7 @@ Plataforma **Kubernetes-nativa** de vigilancia de CEFs (closed-end funds) de cr�
 | 7b | ArgoCD + KSOPS: el clúster se sincroniza solo desde git | ✅ |
 | 8 | Alertas Telegram con reglas declarativas + digest diario | ⬜ |
 | 8½ | Backtest de la señal de descuento (¿revierte tras cruzar z-score −2?) | ✅ |
-| 9 | Prometheus + PVC (observabilidad completa) | ⬜ |
+| 9 | Prometheus + PVC (observabilidad completa) | 🔄 En curso |
 | 10 | Calidad de dato como framework declarativo | ⬜ |
 | 11 | Helm chart, score opcional, README final con guía de portado | ⬜ |
 

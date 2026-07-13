@@ -35,6 +35,8 @@ import tempfile
 import threading
 from pathlib import Path
 
+from prometheus_client import Counter, Gauge
+
 from . import db
 from .config import Universe
 from .ingest.intraday import ingest_intraday
@@ -53,6 +55,36 @@ NAP_CAP_SECONDS = 15 * 60  # tope de siesta: el latido más lento legítimo
 # verdad" → mejor morir y que K8s reinicie (quizá a un pod/nodo más sano)
 # que quedarse de zombi logueando errores con el latido fresco.
 MAX_CONSECUTIVE_FAILURES = 30
+
+# Puerto del /metrics que scrapea Prometheus (fase 9). Env-overridable como el
+# latido; el Service y el Deployment apuntan a este mismo 8000.
+METRICS_PORT = int(os.environ.get("METRICS_PORT") or 8000)
+
+# --- Métricas Prometheus (fase 9) --------------------------------------------
+# El poller es un proceso VIVO → modelo pull: expone esto por HTTP y Prometheus
+# lo scrapea. El servidor HTTP se arranca en la CAPA DE PROCESO (cli.py), no
+# aquí: run() solo TOCA los contadores (operación pura, sin abrir sockets), así
+# el bucle sigue siendo testeable sin puertos. Convención Prometheus: los
+# contadores acumulativos acaban en _total.
+TICKS = Counter("sentinel_poller_ticks_total", "Ticks de mercado ejecutados con éxito")
+TICK_FAILURES = Counter("sentinel_poller_tick_failures_total", "Ticks que fallaron")
+CANDLES = Counter(
+    "sentinel_poller_candles_upserted_total",
+    "Velas 1m upserteadas por el poller (gap-fill de arranque incluido)",
+)
+CONSECUTIVE_FAILURES = Gauge(
+    "sentinel_poller_consecutive_failures",
+    f"Fallos consecutivos actuales (el proceso crashea al llegar a {MAX_CONSECUTIVE_FAILURES})",
+)
+LAST_TICK = Gauge(
+    "sentinel_poller_last_tick_timestamp_seconds",
+    "Momento (epoch Unix) del último tick con éxito; su antigüedad delata un poller mudo",
+)
+MARKET_OPEN = Gauge("sentinel_market_open", "1 si el mercado XNYS está abierto, 0 si no")
+GAPFILL_CANDLES = Gauge(
+    "sentinel_poller_gapfill_candles",
+    "Velas recuperadas en el último gap-fill de arranque (mide el tamaño del apagón)",
+)
 
 
 def _utcnow() -> dt.datetime:
@@ -83,6 +115,8 @@ def run(stop: threading.Event, universe: Universe) -> None:
         with db.connect() as conn:
             n = ingest_intraday(conn, universe, period="7d", save_bronze=True)
         log.info("gap-fill de arranque: %d velas upserteadas (ventana 7d)", n)
+        GAPFILL_CANDLES.set(n)
+        CANDLES.inc(n)
     except Exception:
         log.exception("gap-fill de arranque falló; los ticks 1d cubrirán hoy")
 
@@ -91,7 +125,9 @@ def run(stop: threading.Event, universe: Universe) -> None:
         _beat()
         now = _utcnow()
 
-        if not is_market_open(now):
+        open_now = is_market_open(now)
+        MARKET_OPEN.set(1 if open_now else 0)
+        if not open_now:
             opens_at = next_open(now)
             log.info("mercado cerrado; abre %s (siesta ≤%d min)",
                      opens_at.isoformat(timespec="minutes"), NAP_CAP_SECONDS // 60)
@@ -103,9 +139,15 @@ def run(stop: threading.Event, universe: Universe) -> None:
             with db.connect() as conn:  # conexión por tick (ver docstring)
                 n = ingest_intraday(conn, universe, period="1d")
             failures = 0
+            TICKS.inc()
+            CANDLES.inc(n)
+            CONSECUTIVE_FAILURES.set(0)
+            LAST_TICK.set(_utcnow().timestamp())
             log.info("tick: %d velas upserteadas", n)
         except Exception:
             failures += 1
+            TICK_FAILURES.inc()
+            CONSECUTIVE_FAILURES.set(failures)
             log.exception("tick fallido (%d seguidos)", failures)
             if failures >= MAX_CONSECUTIVE_FAILURES:
                 raise RuntimeError(

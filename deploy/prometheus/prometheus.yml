@@ -1,0 +1,26 @@
+# Config de Prometheus, versionada como código (mismo patrón que los ficheros de
+# provisioning de Grafana): la verdad vive en git y el ConfigMap se GENERA desde
+# aquí con kustomize. Cambiar el scrape = editar este fichero + apply.
+#
+# Service discovery: NO usamos kubernetes_sd_configs. Para 2-3 targets FIJOS, el
+# relabeling por anotaciones sería cargo cult; jobs estáticos contra los Services
+# in-cluster se leen de un vistazo. Puerta de escape: k8s-SD si el set se vuelve
+# dinámico. Prometheus resuelve los nombres cortos dentro de su propio namespace.
+global:
+  scrape_interval: 30s
+  scrape_timeout: 10s
+
+scrape_configs:
+  # El propio Prometheus (sanity: si ESTE target cae, algo va muy mal).
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # El poller intradía (fase 9, commit 2): proceso vivo → modelo pull. Expone
+  # /metrics en el 8000 vía el Service poller-metrics. Aquí se ve por qué el
+  # poller, que en la decisión #24 "no recibía tráfico de nadie", ahora SÍ: el
+  # scrape es tráfico. Aun así sigue sin readinessProbe (1 réplica; un target
+  # caído lo marca Prometheus, no hay enrutado de Service que decidir).
+  - job_name: poller
+    static_configs:
+      - targets: ["poller-metrics:8000"]
