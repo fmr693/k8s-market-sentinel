@@ -68,6 +68,31 @@ fx_pairs: # Tipos oficiales del BCE vía frankfurter.app (publicados ~16:00 CET,
   # fixing oficial diario — la banda 1,10–1,20 de las alertas se evalúa contra él.
   - EUR/USD
 
+nav_check: # Cross-check del NAV (fase 10): CEF -> ticker de yfinance cuyo close ES el NAV.
+  # Yahoo publica el NAV de los CEFs con el patrón X<TICKER>X (verificado en vivo:
+  # XWDIX 14,19, XFSCX 7,13...). El NAV de gold.nav_crosscheck compara este proxy
+  # con el de CEFConnect; si divergen >2%, cef_snapshot degrada nav_quality a
+  # 'sospechoso' (la evidencia de FSCO del brief). Config-driven: corregir aquí.
+  WDI: XWDIX
+  KIO: XKIOX
+  BIT: XBITX
+  HYT: XHYTX
+  BTZ: XBTZX
+  BHK: XBHKX
+  DSL: XDSLX
+  FSCO: XFSCX
+  BGH: XBGHX
+  ARDC: XARDCX
+  GHY: XGHYX
+  OPP: XOPPX
+  PDI: XPDIX
+  PDO: XPDOX
+  PTY: XPTYX
+  BST: XBSTX
+  ECAT: ECAT # rareza de la API: su NAVTicker es él mismo, no sigue el patrón X…X
+  # BCAT y ADX omitidos: Yahoo no lista su NAV (XBCATX/XADXX → 404). Hueco
+  # documentado (como otros de la fuente NAV); en el panel se ven sin cross-check.
+
 defaults:
   # Si un ticker no tiene datos aún, el backfill arranca aquí.
   # ~10 años: suficiente para z-scores a 1 año con contexto de ciclo completo.

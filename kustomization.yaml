@@ -25,6 +25,8 @@ resources:
   - deploy/k8s/cronjob-fx.yaml
   - deploy/k8s/cronjob-macro.yaml
   - deploy/k8s/cronjob-distributions.yaml
+  - deploy/k8s/cronjob-check-quality.yaml
+  - deploy/k8s/cronjob-nav-proxy.yaml
   - deploy/k8s/deployment-poller.yaml
   - deploy/k8s/grafana.yaml
   - deploy/k8s/prometheus.yaml
@@ -59,6 +61,11 @@ configMapGenerator:
   - name: sentinel-tickers
     files:
       - tickers.yaml=config/tickers.yaml
+  # Checks de calidad de dato (fase 10): mismo patrón config-driven — la verdad
+  # vive en config/quality_checks.yaml y el ConfigMap se genera desde ahí.
+  - name: sentinel-quality-checks
+    files:
+      - config/quality_checks.yaml
   # Grafana aprovisionado como código (fase 5): mismos generadores, misma
   # filosofía — editar un dashboard = commit del JSON + kubectl apply -k .
   - name: grafana-provisioning-datasources

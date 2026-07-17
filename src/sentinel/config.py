@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import datetime as dt
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
@@ -22,6 +22,7 @@ load_dotenv()
 # En la imagen Docker (fase 2) config/ y db/ se copiarán a esta misma ruta relativa.
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TICKERS_FILE = REPO_ROOT / "config" / "tickers.yaml"
+DEFAULT_QUALITY_CHECKS_FILE = REPO_ROOT / "config" / "quality_checks.yaml"
 
 
 def get_database_url() -> str:
@@ -58,6 +59,11 @@ class Universe:
     overlap_days: int
     macro_overlap_days: int
     poll_interval_seconds: int
+    # Cross-check del NAV (fase 10): CEF -> ticker de yfinance cuyo close ES el
+    # NAV (p.ej. WDI -> XWDIX). Opcional (default {}): sin la clave, no hay
+    # cross-check y el pipeline sigue igual. field(default_factory) porque un
+    # dict mutable no puede ser default directo en un dataclass frozen.
+    nav_check: dict[str, str] = field(default_factory=dict)
 
     @property
     def price_tickers(self) -> list[str]:
@@ -76,6 +82,11 @@ class Universe:
     def nav_tickers(self) -> list[str]:
         """Solo los CEFs: los benchmarks (índices, FX, oro) no tienen NAV."""
         return self.cef_credit + self.cef_contrast
+
+    @property
+    def nav_proxy_tickers(self) -> list[str]:
+        """Los tickers X…X de yfinance del cross-check (fase 10), sin duplicados."""
+        return sorted(set(self.nav_check.values()))
 
 
 def load_universe(path: Path | None = None) -> Universe:
@@ -96,4 +107,44 @@ def load_universe(path: Path | None = None) -> Universe:
         overlap_days=int(defaults["overlap_days"]),
         macro_overlap_days=int(defaults["macro_overlap_days"]),
         poll_interval_seconds=int(defaults["poll_interval_seconds"]),
+        nav_check=raw.get("nav_check", {}),  # opcional: sin la clave, sin cross-check
     )
+
+
+@dataclass(frozen=True)
+class QualityCheck:
+    """Un check de calidad de dato declarado en quality_checks.yaml (fase 10).
+
+    `query` devuelve UN número; el runner (quality.py) lo compara con los
+    umbrales para dar un status. Umbrales opcionales: `above` = peor cuanto más
+    alto (frescura, divergencia); `below` = peor cuanto más bajo (cobertura)."""
+
+    name: str
+    description: str
+    query: str
+    unit: str
+    warn_above: float | None = None
+    fail_above: float | None = None
+    warn_below: float | None = None
+    fail_below: float | None = None
+
+
+def load_quality_checks(path: Path | None = None) -> list[QualityCheck]:
+    """Carga los checks de config/quality_checks.yaml (o del ConfigMap montado).
+    QUALITY_CHECKS_FILE permite que K8s apunte al fichero del ConfigMap."""
+    path = path or Path(os.environ.get("QUALITY_CHECKS_FILE", DEFAULT_QUALITY_CHECKS_FILE))
+    with open(path, encoding="utf-8") as f:
+        raw = yaml.safe_load(f)
+    return [
+        QualityCheck(
+            name=c["name"],
+            description=c.get("description", ""),
+            query=c["query"],
+            unit=c.get("unit", ""),
+            warn_above=c.get("warn_above"),
+            fail_above=c.get("fail_above"),
+            warn_below=c.get("warn_below"),
+            fail_below=c.get("fail_below"),
+        )
+        for c in raw["checks"]
+    ]

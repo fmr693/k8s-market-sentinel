@@ -73,3 +73,18 @@ class TestLoadUniverse:
         u = load_universe(_write(tmp_path, data))
         assert u.intraday_exclude == []
         assert u.price_tickers_intraday == u.price_tickers
+
+
+class TestNavCheck:
+    def test_carga_nav_check_y_proxies(self, tmp_path):
+        data = {**BASE_YAML, "nav_check": {"WDI": "XWDIX", "FSCO": "XFSCX", "ECAT": "ECAT"}}
+        u = load_universe(_write(tmp_path, data))
+        assert u.nav_check["WDI"] == "XWDIX"
+        # los proxies para el ingestor: ordenados y sin duplicados
+        assert u.nav_proxy_tickers == ["ECAT", "XFSCX", "XWDIX"]
+
+    def test_sin_la_clave_nav_check_vacio(self, tmp_path):
+        # ConfigMap viejo sin nav_check: degrada a {} (como stocks/intraday_exclude)
+        u = load_universe(_write(tmp_path, BASE_YAML))  # BASE_YAML no tiene nav_check
+        assert u.nav_check == {}
+        assert u.nav_proxy_tickers == []

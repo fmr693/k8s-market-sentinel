@@ -1,0 +1,74 @@
+# Checks de calidad de dato — config-driven (fase 10). Añadir un check = añadir
+# una entrada aquí; el código NO cambia (mismo principio que tickers.yaml).
+#
+# Cada check corre su `query` (debe devolver UNA fila con UN número en la primera
+# columna) y compara el valor con los umbrales para dar un status:
+#   - warn_above / fail_above: el valor es PEOR cuanto más ALTO (frescura en
+#     horas, nº de rancios, % de divergencia...).
+#   - warn_below / fail_below: el valor es PEOR cuanto más BAJO (cobertura, nº de
+#     filas esperadas...).
+# Todos los umbrales son opcionales; se aplican los que existan. 'fail' manda
+# sobre 'warn'. El runner ejecuta el SQL en una transacción READ ONLY (un check
+# es una medición: no puede mutar la BD).
+
+checks:
+  # --- Frescura por fuente: horas desde el último ingested_at ----------------
+  # Umbrales tolerantes al fin de semana: el carril nocturno es L-V, así que un
+  # sábado/domingo el dato envejece legítimamente (~48-72h). 'fail' solo pasado
+  # un finde completo + margen.
+  - name: prices_daily_freshness
+    description: "Horas desde la última vela diaria ingerida (CronJob nocturno L-V)"
+    query: "SELECT extract(epoch FROM now() - max(ingested_at)) / 3600 FROM silver.prices_daily"
+    unit: hours
+    warn_above: 30
+    fail_above: 75
+
+  - name: prices_intraday_freshness
+    description: "Horas desde el último tick del poller (envejece de noche y en findes)"
+    query: "SELECT extract(epoch FROM now() - max(ingested_at)) / 3600 FROM silver.prices_intraday"
+    unit: hours
+    warn_above: 20
+    fail_above: 75
+
+  - name: nav_freshness
+    description: "Horas desde el último NAV ingerido (CronJob nocturno L-V)"
+    query: "SELECT extract(epoch FROM now() - max(ingested_at)) / 3600 FROM silver.navs"
+    unit: hours
+    warn_above: 30
+    fail_above: 75
+
+  - name: macro_freshness
+    description: "Horas desde la última observación FRED ingerida"
+    query: "SELECT extract(epoch FROM now() - max(ingested_at)) / 3600 FROM silver.macro_series WHERE series_id <> 'EURUSD_ECB'"
+    unit: hours
+    warn_above: 48
+    fail_above: 96
+
+  - name: fx_freshness
+    description: "Horas desde el último fixing EUR/USD del BCE"
+    query: "SELECT extract(epoch FROM now() - max(ingested_at)) / 3600 FROM silver.macro_series WHERE series_id = 'EURUSD_ECB'"
+    unit: hours
+    warn_above: 48
+    fail_above: 96
+
+  # --- Rancios: nº de CEFs cuyo NAV lleva >4 días sin refrescarse ------------
+  # (nav_quality='rancio' en gold.cef_snapshot). >0 = el scraper falló al menos
+  # un CEF; >3 = está roto de verdad.
+  - name: stale_nav_count
+    description: "Nº de CEFs con NAV rancio (>4 días sin refrescar)"
+    query: "SELECT count(*) FROM gold.cef_snapshot WHERE nav_quality = 'rancio'"
+    unit: count
+    warn_above: 0
+    fail_above: 3
+
+  # --- Cross-check del NAV (fase 10, slice 2): ¿coinciden las dos fuentes? -----
+  # Máxima divergencia relativa CEFConnect vs proxy yfinance en los últimos días.
+  # >2% = un NAV reciente puede ser preliminar (la evidencia de FSCO del brief);
+  # es el mismo 2% con el que cef_snapshot degrada nav_quality a 'sospechoso'.
+  # Sin datos de cross-check → NULL → 'error' (el check no pudo medir).
+  - name: nav_crosscheck
+    description: "Máx divergencia NAV CEFConnect vs proxy yfinance (últimos días)"
+    query: "SELECT max(divergence) FROM gold.nav_crosscheck WHERE nav_date >= (SELECT max(nav_date) FROM gold.nav_crosscheck) - 5"
+    unit: pct
+    warn_above: 0.02
+    fail_above: 0.05

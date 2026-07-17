@@ -37,7 +37,7 @@ Plataforma **Kubernetes-nativa** de vigilancia de CEFs (closed-end funds) de cr�
 | 8 | Alertas Telegram con reglas declarativas + digest diario | ⬜ |
 | 8½ | Backtest de la señal de descuento (¿revierte tras cruzar z-score −2?) | ✅ |
 | 9 | Prometheus + PVC (observabilidad completa) | ✅ |
-| 10 | Calidad de dato como framework declarativo | ⬜ |
+| 10 | Calidad de dato como framework declarativo | 🔄 En curso |
 | 11 | Helm chart, score opcional, README final con guía de portado | ⬜ |
 
 > **Reencuadre (2026-07-08):** este proyecto no compite en producto financiero — compite en **arquitectura portable**. La tesis CEF es la carga útil demostrativa; el patrón (medallón, ingesta idempotente, config-driven, crash-only, GitOps) es lo que se deja a prueba de bombas y se puede aplicar a cualquier otro dominio de datos.

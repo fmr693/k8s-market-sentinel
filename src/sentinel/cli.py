@@ -19,12 +19,13 @@ import threading
 
 from prometheus_client import CollectorRegistry, Gauge, push_to_gateway, start_http_server
 
-from . import db, poller
-from .config import load_universe
+from . import db, poller, quality
+from .config import load_quality_checks, load_universe
 from .ingest.distributions import ingest_distributions
 from .ingest.fx import ingest_fx_rates
 from .ingest.macro import ingest_macro_series
 from .ingest.nav import ingest_navs
+from .ingest.nav_proxy import ingest_nav_proxy
 from .ingest.prices import ingest_daily_prices
 from .migrations import apply_migrations
 
@@ -78,6 +79,19 @@ def _print_ingest_summary(result: dict[str, int], unit: str, job: str) -> int:
         print("  ERRORES:", ", ".join(errors))
     _push_ingest_metrics(job, result)
     return 1 if errors else 0
+
+
+def _print_quality_summary(results: list[dict]) -> int:
+    """Resumen de los checks de calidad + exit code (≠0 si algún check está en
+    'fail' o 'error', para que el CronJob de K8s lo refleje; 'warn' no rompe)."""
+    print(f"Checks de calidad: {len(results)} corridos.")
+    for r in results:
+        value = "   -  " if r["value"] is None else f"{r['value']:8.2f}"
+        print(f"  [{r['status'].upper():5s}] {r['name']:26s} {value} {r['unit']}")
+    broken = [r["name"] for r in results if r["status"] in ("fail", "error")]
+    if broken:
+        print("  FALLOS:", ", ".join(broken))
+    return 1 if broken else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -146,6 +160,21 @@ def main(argv: list[str] | None = None) -> int:
         help="Subconjunto de CEFs (por defecto, todos los del universo)",
     )
 
+    p_navproxy = sub.add_parser(
+        "ingest-nav-proxy",
+        help="NAV-proxy de yfinance (X…X) para el cross-check del NAV (fase 10)",
+    )
+    p_navproxy.add_argument(
+        "--tickers",
+        nargs="*",
+        help="Subconjunto de CEFs (por defecto, todos los de nav_check)",
+    )
+
+    sub.add_parser(
+        "check-quality",
+        help="Corre los checks de calidad de dato de config/quality_checks.yaml (fase 10)",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "migrate":
@@ -201,6 +230,18 @@ def main(argv: list[str] | None = None) -> int:
         with db.connect() as conn:
             result = ingest_navs(conn, universe, args.tickers)
         return _print_ingest_summary(result, "NAVs", args.command)
+
+    if args.command == "ingest-nav-proxy":
+        universe = load_universe()
+        with db.connect() as conn:
+            result = ingest_nav_proxy(conn, universe, args.tickers)
+        return _print_ingest_summary(result, "NAVs", args.command)
+
+    if args.command == "check-quality":
+        checks = load_quality_checks()
+        with db.connect() as conn:
+            results = quality.run_checks(conn, checks)
+        return _print_quality_summary(results)
 
     return 2  # unreachable con required=True
 
