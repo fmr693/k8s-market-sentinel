@@ -1,6 +1,6 @@
 [project]
 name = "sentinel"
-version = "0.6.0"
+version = "0.7.0"
 description = "k8s-market-sentinel: CEF discount watchtower (medallion on Postgres, K8s-native)"
 requires-python = ">=3.11"
 dependencies = [
