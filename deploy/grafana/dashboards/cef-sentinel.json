@@ -514,9 +514,13 @@
                         "color": "text",
                         "index": 0
                       },
+                      "sospechoso": {
+                        "color": "orange",
+                        "index": 1
+                      },
                       "rancio": {
                         "color": "red",
-                        "index": 1
+                        "index": 2
                       }
                     }
                   }

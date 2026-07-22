@@ -1,7 +1,7 @@
 {
   "title": "Pipeline Health",
   "uid": "pipeline-health",
-  "description": "Operations dashboard: data freshness per source, ingest activity and NAV quality (SQL over Neon), plus process metrics (poller + ingest jobs) from Prometheus (phase 9).",
+  "description": "Operations dashboard: data freshness per source, ingest activity and NAV quality (SQL over Neon), process metrics (poller + ingest jobs) from Prometheus (phase 9), and the declarative data quality checks + NAV cross-check (phase 10).",
   "tags": ["sentinel", "ops"],
   "schemaVersion": 39,
   "editable": true,
@@ -373,6 +373,191 @@
               { "color": "green", "value": null },
               { "color": "yellow", "value": 30 },
               { "color": "red", "value": 78 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 16,
+      "type": "table",
+      "title": "Data quality - latest check result",
+      "description": "One row per check DECLARED in config/quality_checks.yaml (phase 10). The value is shown raw on purpose: its unit lives in the config, not in the database, so formatting it per check here would mean editing this panel every time a check is added to the YAML - the opposite of config-driven. Read the unit from the check name (freshness = hours, count = CEFs, crosscheck = fraction). 'error' is not 'fail': the check could not even be measured (see Detail).",
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 27 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT check_name AS \"Check\", round(value, 4) AS \"Value\", status AS \"Status\", run_ts AS \"Last run\", detail AS \"Detail\" FROM gold.data_quality_latest ORDER BY CASE status WHEN 'fail' THEN 0 WHEN 'error' THEN 1 WHEN 'warn' THEN 2 ELSE 3 END, check_name"
+        }
+      ],
+      "options": { "sortBy": [] },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto", "cellOptions": { "type": "auto" } } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Status" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "ok": { "text": "OK", "color": "green", "index": 0 },
+                      "warn": { "text": "Warn", "color": "orange", "index": 1 },
+                      "fail": { "text": "FAIL", "color": "red", "index": 2 },
+                      "error": { "text": "Error", "color": "purple", "index": 3 }
+                    }
+                  }
+                ]
+              },
+              { "id": "custom.cellOptions", "value": { "type": "color-text" } }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 17,
+      "type": "stat",
+      "title": "Data quality - checks not passing",
+      "description": "Checks currently in 'fail' or 'error'. The CronJob runs nightly at 23:45 and exits non-zero on either, so K8s marks the Job failed too.",
+      "gridPos": { "h": 4, "w": 10, "x": 14, "y": 27 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT count(*) AS failing FROM gold.data_quality_latest WHERE status IN ('fail', 'error')"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Data quality - checks not passing over time",
+      "description": "History from gold.data_quality_results: this is what answers 'since WHEN is it broken?' - and the reason the results are a TABLE and not a view (decision #44). One bar group per run (nightly).",
+      "gridPos": { "h": 4, "w": 10, "x": 14, "y": 31 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT run_ts AS \"time\", (count(*) FILTER (WHERE status IN ('fail', 'error')))::double precision AS \"fail/error\", (count(*) FILTER (WHERE status = 'warn'))::double precision AS \"warn\" FROM gold.data_quality_results WHERE $__timeFilter(run_ts) GROUP BY 1 ORDER BY 1"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "bars", "fillOpacity": 60, "lineWidth": 1 },
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "fail/error" },
+            "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } } ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "warn" },
+            "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } } ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 19,
+      "type": "table",
+      "title": "NAV cross-check - CEFConnect vs Yahoo proxy (latest per CEF)",
+      "description": "Second opinion on the fragile piece (phase 10, decision #45): the NAV scraped from CEFConnect against the one Yahoo publishes for the same fund (ticker X...X). Above 2% the recent CEFConnect point may be preliminary, and gold.cef_snapshot degrades nav_quality to 'sospechoso' by itself. CEFs with no proxy in Yahoo (BCAT, ADX) simply do not appear - a documented gap, not an error.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 35 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT ticker AS \"CEF\", nav_date AS \"NAV date\", nav_cefconnect AS \"NAV (CEFConnect)\", nav_proxy AS \"NAV (Yahoo proxy)\", proxy_ticker AS \"Proxy\", round(divergence * 100, 2) AS \"Divergence %\" FROM (SELECT DISTINCT ON (ticker) * FROM gold.nav_crosscheck ORDER BY ticker, nav_date DESC) t ORDER BY divergence DESC"
+        }
+      ],
+      "options": { "sortBy": [] },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto", "cellOptions": { "type": "auto" } } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Divergence %" },
+            "properties": [
+              { "id": "unit", "value": "percent" },
+              { "id": "decimals", "value": 2 },
+              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "orange", "value": 2 },
+                    { "color": "red", "value": 5 }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "NAV cross-check - worst divergence per day",
+      "description": "Max relative divergence across the universe, per NAV date. The dashed lines are the same 2% / 5% thresholds used by the nav_crosscheck check in config/quality_checks.yaml and by the 'sospechoso' degradation in gold.cef_snapshot. A spike on the most recent date only = a preliminary NAV point (the FSCO evidence); a sustained level = the scraper is reading something else.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 35 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT nav_date::timestamptz AS \"time\", (max(divergence) * 100)::double precision AS \"worst divergence\" FROM gold.nav_crosscheck WHERE $__timeFilter(nav_date::timestamptz) GROUP BY 1 ORDER BY 1"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineWidth": 1,
+            "thresholdsStyle": { "mode": "dashed" }
+          },
+          "unit": "percent",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 2 },
+              { "color": "red", "value": 5 }
             ]
           }
         },
