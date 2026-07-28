@@ -49,6 +49,15 @@ El detalle vivo de cada decisión (con el porqué y las lecciones aprendidas) es
 
 Esta arquitectura está **deliberadamente sobredimensionada** con fines demostrativos y de aprendizaje (Kubernetes, observabilidad, CD). Para el uso personal real bastaría un cron y una base SQLite. La gracia está en construir la versión "de plataforma" sabiendo en cada decisión cuál sería la alternativa simple — y documentándolo.
 
+## Portable no es lo mismo que permanente
+
+Conviene separar dos propiedades que se confunden:
+
+- **Portabilidad — conseguida.** *Todo* lo necesario para reconstruir el sistema viaja: los manifests de Kubernetes (`deploy/k8s/`), el kustomize, las Applications de ArgoCD (`deploy/gitops/`), los dashboards, la config de Prometheus y hasta los **secretos, cifrados** (`deploy/secrets/`). La imagen vive en GHCR y los datos en Neon. El único secreto fuera de git es la clave age, que viaja contigo. Borrar el clúster y rehacerlo desde cero en minutos es parte del flujo normal — se ha hecho varias veces.
+- **Permanencia (alta disponibilidad) — pendiente.** El clúster de desarrollo es k3d dentro de Docker Desktop, en un portátil. Cuando el portátil se apaga, no corre nadie: los CronJobs de ingesta no se ejecutan y **no recuperan** las noches perdidas más allá de `startingDeadlineSeconds`.
+
+Lo que salva el dato en ese hueco no es el orquestador, sino el **backfill idempotente**: cada ingestor pregunta "¿cuál es mi último dato?" y sigue desde ahí, así que una sola ejecución tapa días de parón. Kubernetes aporta robustez de *proceso* (pod que muere, nodo que cae, deriva manual); la robustez del *dato* es de la aplicación. La permanencia llega con la fase pendiente: desplegar la misma configuración, sin cambiar una línea, en un servidor que no se apaga.
+
 ## Arranque rápido
 
 > ¿Solo quieres **verlo funcionando** en una máquina que no es la tuya?

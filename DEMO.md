@@ -85,10 +85,21 @@ Enseña la ingeniería: GitOps, observabilidad, secretos cifrados, autorreparaci
 ### Requisitos añadidos
 `k3d` y `kubectl` ([k3d.io](https://k3d.io) · `winget install Kubernetes.kubectl`).
 
+> **Arrancar Docker NO arranca Kubernetes.** El clúster k3d son contenedores
+> Docker que, al apagar Docker Desktop, mueren y **se quedan parados**: no
+> vuelven solos. Son dos pasos distintos. Mira primero si el clúster ya existe:
+>
+> ```bash
+> k3d cluster list      # SERVERS 0/1 = existe pero está PARADO
+> ```
+
 ```bash
-# 1. Clúster. El --api-port NO es decorativo: sin él, k3d coge un puerto
-#    aleatorio que en Windows suele caer en un rango reservado por WinNAT y el
-#    clúster no arranca tras reiniciar Docker.
+# 1. Clúster.
+#    a) Si ya existe (lo normal en tu máquina de siempre): arrancarlo.
+k3d cluster start sentinel
+#    b) Si no existe (máquina nueva): crearlo. El --api-port NO es decorativo:
+#       sin él, k3d coge un puerto aleatorio que en Windows suele caer en un
+#       rango reservado por WinNAT y el clúster no arranca tras reiniciar Docker.
 k3d cluster create sentinel --api-port 6550
 
 # 2. La app (la imagen se baja sola de GHCR: es pública)
@@ -119,6 +130,26 @@ kubectl apply -f deploy/gitops/argocd/application-sentinel-prod.yaml
 kubectl -n argocd get applications   # Synced/Healthy
 ```
 
+### Refrescar el dato si el clúster estuvo apagado
+
+Los CronJobs no recuperan las noches perdidas (solo lo que cae dentro de
+`startingDeadlineSeconds`, 1 h). Pero el **backfill es idempotente**: una sola
+ejecución tapa el hueco, sean 2 días o 2 semanas.
+
+```bash
+for cj in ingest-prices ingest-nav ingest-macro ingest-fx \
+          ingest-distributions ingest-nav-proxy; do
+  kubectl -n sentinel create job --from=cronjob/$cj refresh-$cj
+done
+kubectl -n sentinel create job --from=cronjob/check-quality refresh-check-quality
+```
+
+Comprobar que quedó al día (debe dar 0):
+
+```bash
+kubectl -n sentinel logs job/refresh-check-quality | tail -10
+```
+
 ### Demos que lucen
 - **Autorreparación:** `kubectl -n sentinel delete pod -l app.kubernetes.io/name=poller`
   → nace uno nuevo en segundos y su gap-fill recupera las velas perdidas.
@@ -134,7 +165,11 @@ kubectl -n argocd get applications   # Synced/Healthy
 | Síntoma | Causa y arreglo |
 |---|---|
 | `sops: no encuentro...` o no descifra | La clave age no está en la ruta estándar, o es otra. Compara con `age1gqgan8...` de `.sops.yaml`. |
-| `password authentication failed` en Grafana | La password de `grafana_ro` del secreto ya no es la de Neon. Rótala como owner y re-cifra (pasó el 2026-07-22). |
+| Arranqué Docker y no hay pods | Docker ≠ Kubernetes: el clúster k3d no vuelve solo. `k3d cluster start sentinel`. |
+| `cluster already exists` al crear | Ya existe: usa `k3d cluster start sentinel` en vez de `create`. |
+| **Dashboards con datos viejos / todo "rancio"** | La ingesta corre SOLO en los CronJobs del clúster (23:05-23:45 L-V) — si estuvo apagado, nadie ingirió, y los CronJobs **no recuperan** ejecuciones perdidas. El compose no ingiere nada. Arreglo: dispararlos a mano (ver abajo). |
+| Cambié un secreto y el pod sigue igual | Un Secret consumido como **variables de entorno no se recarga en caliente**, aunque ArgoCD ya lo haya sincronizado: `kubectl -n sentinel rollout restart deploy/<x>`. |
+| `password authentication failed` en Grafana | Suele ser lo anterior (pod con el Secret viejo → `rollout restart`). Si persiste, la password de `grafana_ro` del secreto ya no es la de Neon: recupérala o rótala y re-cifra. |
 | k3d no arranca tras reiniciar Docker | Puerto de API en rango reservado por WinNAT. Recrear con `--api-port 6550`. |
 | Pods con `Temporary failure in name resolution` | CoreDNS aún no está listo tras crear el clúster. Espera unos segundos o reinicia el pod. |
 | Prometheus en CrashLoop | Falta `fsGroup: 65534` (el PVC nace de root y prom corre como `nobody`). Ya está en el manifest. |
