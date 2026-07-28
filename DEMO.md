@@ -133,21 +133,17 @@ A los ~45 s: los 3 targets de Prometheus **UP**, ArgoCD **Synced/Healthy** solo,
 Grafana leyendo Neon sin tocar nada (el Secret no cambió, así que **no** hace
 falta `rollout restart`; solo si acabas de cambiar el secreto).
 
-> **El gap-fill del poller y el arranque en frío.** El poller intenta su
-> gap-fill ~5 s después de nacer, cuando CoreDNS todavía no resuelve el host de
-> Neon → `Temporary failure in name resolution`. **Arreglado en el código**: ahora
-> reintenta dentro del proceso con backoff exponencial (4 intentos, 5+10+20 s),
-> interrumpible por SIGTERM.
+> **El gap-fill del poller y el arranque en frío — resuelto en la 0.8.0.** El
+> poller intenta su gap-fill ~5 s después de nacer, cuando CoreDNS todavía no
+> resuelve el host de Neon → `Temporary failure in name resolution`. Desde la
+> **0.8.0** reintenta dentro del proceso con backoff exponencial (4 intentos,
+> 5+10+20 s), interrumpible por SIGTERM: ya no hace falta tocar nada al arrancar
+> en frío.
 >
-> ⚠️ **Pero el arreglo viaja en la imagen**: si el clúster corre la **0.7.0 o
-> anterior**, el comportamiento viejo sigue vigente (un solo intento, sin
-> reintento hasta reiniciar el pod). Comprueba con
-> `kubectl -n sentinel get deploy poller -o jsonpath='{..image}'`; si es ≤0.7.0
-> y vienes de un parón largo:
->
-> ```bash
-> kubectl -n sentinel rollout restart deploy/poller   # un minuto después del arranque
-> ```
+> Solo si el clúster corriera una imagen **≤0.7.0** (compruébalo con
+> `kubectl -n sentinel get deploy poller -o jsonpath='{..image}'`) seguiría el
+> comportamiento viejo, y tras un parón largo haría falta
+> `kubectl -n sentinel rollout restart deploy/poller`.
 
 ### GitOps (opcional, +5 min) — "desplegar = hacer commit"
 ```bash

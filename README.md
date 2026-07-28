@@ -32,7 +32,7 @@ Plataforma **Kubernetes-nativa** de vigilancia de CEFs (closed-end funds) de cr�
 | 5 | Capa gold completa + dashboards Grafana provisionados | ✅ |
 | 5½ | Distribuciones + yield TTM (tabla, vista, CronJob y panel) | ✅ |
 | 5¾ | Flecos: yield en la tabla del universo, column guide, `intraday_exclude`, annotations de recortes | ✅ |
-| 6 | CI/CD: GitHub Actions → GHCR + lock de dependencias (`uv.lock`) | ✅ 0.7.0 publicada en GHCR |
+| 6 | CI/CD: GitHub Actions → GHCR + lock de dependencias (`uv.lock`) | ✅ 0.8.0 publicada en GHCR |
 | 7a | Secretos GitOps-ready: cifrados en el repo con SOPS + age | ✅ |
 | 7b | ArgoCD + KSOPS: el clúster se sincroniza solo desde git | ✅ |
 | 8 | Alertas Telegram con reglas declarativas + digest diario | ⬜ |
