@@ -133,12 +133,17 @@ A los ~45 s: los 3 targets de Prometheus **UP**, ArgoCD **Synced/Healthy** solo,
 Grafana leyendo Neon sin tocar nada (el Secret no cambió, así que **no** hace
 falta `rollout restart`; solo si acabas de cambiar el secreto).
 
-> **Reincidencia conocida: el gap-fill del poller falla en el arranque en frío.**
-> El poller intenta su gap-fill ~5 s después de nacer, cuando CoreDNS todavía no
-> resuelve → `Temporary failure in name resolution`. Degrada con elegancia ("los
-> ticks 1d cubrirán hoy") y sigue vivo, pero **el gap-fill solo se intenta al
-> arrancar**: no se reintenta hasta que el pod se reinicie. Si vienes de un
-> parón largo y quieres que recupere el intradía perdido:
+> **El gap-fill del poller y el arranque en frío.** El poller intenta su
+> gap-fill ~5 s después de nacer, cuando CoreDNS todavía no resuelve el host de
+> Neon → `Temporary failure in name resolution`. **Arreglado en el código**: ahora
+> reintenta dentro del proceso con backoff exponencial (4 intentos, 5+10+20 s),
+> interrumpible por SIGTERM.
+>
+> ⚠️ **Pero el arreglo viaja en la imagen**: si el clúster corre la **0.7.0 o
+> anterior**, el comportamiento viejo sigue vigente (un solo intento, sin
+> reintento hasta reiniciar el pod). Comprueba con
+> `kubectl -n sentinel get deploy poller -o jsonpath='{..image}'`; si es ≤0.7.0
+> y vienes de un parón largo:
 >
 > ```bash
 > kubectl -n sentinel rollout restart deploy/poller   # un minuto después del arranque

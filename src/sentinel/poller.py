@@ -56,6 +56,13 @@ NAP_CAP_SECONDS = 15 * 60  # tope de siesta: el latido más lento legítimo
 # que quedarse de zombi logueando errores con el latido fresco.
 MAX_CONSECUTIVE_FAILURES = 30
 
+# Reintentos del gap-fill de arranque (ver run()). 4 intentos con base 5s
+# esperan 5+10+20 = 35s en el peor caso: de sobra para que CoreDNS levante
+# (medido: fallaba a los 5s y resolvía antes de 25s) y lo bastante corto para
+# no retrasar el arranque si el fallo fuera permanente.
+GAPFILL_MAX_ATTEMPTS = 4
+GAPFILL_BACKOFF_BASE_S = 5.0
+
 # Puerto del /metrics que scrapea Prometheus (fase 9). Env-overridable como el
 # latido; el Service y el Deployment apuntan a este mismo 8000.
 METRICS_PORT = int(os.environ.get("METRICS_PORT") or 8000)
@@ -102,23 +109,57 @@ def nap_seconds(now: dt.datetime, opens_at: dt.datetime, cap: float = NAP_CAP_SE
     return max(0.0, min(remaining, cap))
 
 
+def gapfill_backoff_seconds(attempt: int, base: float = GAPFILL_BACKOFF_BASE_S) -> float:
+    """Espera antes del reintento nº `attempt` (1-indexado) del gap-fill.
+
+    Exponencial (base, 2·base, 4·base…): cubre de sobra el arranque de CoreDNS
+    sin castigar a la fuente si el fallo fuera de otra clase. Pura → testeable.
+    """
+    return base * (2 ** (attempt - 1))
+
+
 def run(stop: threading.Event, universe: Universe) -> None:
     """Bucle principal. Sale limpiamente cuando `stop` se activa (SIGTERM)."""
     interval = universe.poll_interval_seconds
     log.info("poller: arrancando (cadencia %ds, latido en %s)", interval, HEARTBEAT_FILE)
 
-    # Gap-fill de arranque: la ventana máxima de 1m que da yfinance. Si falla
-    # NO crasheamos: reintentar en bucle de reinicios amplificaría un 429 de
-    # Yahoo (cada reinicio = otra petición 7d), y los ticks de "1d" ya van
-    # curando el día de hoy. El hueco más viejo queda documentado en el log.
-    try:
-        with db.connect() as conn:
-            n = ingest_intraday(conn, universe, period="7d", save_bronze=True)
-        log.info("gap-fill de arranque: %d velas upserteadas (ventana 7d)", n)
-        GAPFILL_CANDLES.set(n)
-        CANDLES.inc(n)
-    except Exception:
-        log.exception("gap-fill de arranque falló; los ticks 1d cubrirán hoy")
+    # Gap-fill de arranque: la ventana máxima de 1m que da yfinance.
+    #
+    # Se reintenta DENTRO del proceso, con backoff exponencial y un tope de
+    # intentos. Matiz importante: seguimos SIN crashear, porque reintentar "en
+    # bucle de reinicios" sí amplificaría un 429 de Yahoo (cada reinicio = otra
+    # petición 7d). Lo que motiva el reintento in-process es otro fallo, medido
+    # y reproducible: en TODO arranque en frío del clúster el gap-fill moría a
+    # los ~5 s con "Temporary failure in name resolution" porque CoreDNS aún no
+    # resolvía el host de Neon. Es transitorio y se cura solo en segundos, pero
+    # como el gap-fill solo se intentaba UNA vez, el intradía perdido no se
+    # recuperaba hasta reiniciar el pod a mano.
+    #
+    # La espera usa stop.wait(): un SIGTERM durante los reintentos sale limpio
+    # en vez de hacer esperar a K8s hasta el kill (decisión #24, crash-only).
+    for attempt in range(1, GAPFILL_MAX_ATTEMPTS + 1):
+        try:
+            with db.connect() as conn:
+                n = ingest_intraday(conn, universe, period="7d", save_bronze=True)
+            log.info("gap-fill de arranque: %d velas upserteadas (ventana 7d)", n)
+            GAPFILL_CANDLES.set(n)
+            CANDLES.inc(n)
+            break
+        except Exception:
+            if attempt == GAPFILL_MAX_ATTEMPTS:
+                log.exception(
+                    "gap-fill de arranque falló tras %d intentos; los ticks 1d cubrirán hoy",
+                    attempt,
+                )
+                break
+            espera = gapfill_backoff_seconds(attempt)
+            log.warning(
+                "gap-fill de arranque falló (intento %d/%d); reintento en %.0fs",
+                attempt, GAPFILL_MAX_ATTEMPTS, espera,
+            )
+            if stop.wait(espera):
+                log.info("SIGTERM durante los reintentos del gap-fill; salida limpia")
+                return
 
     failures = 0
     while not stop.is_set():

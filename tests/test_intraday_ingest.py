@@ -9,7 +9,7 @@ import datetime as dt
 import pandas as pd
 
 from sentinel.ingest.intraday import dataframe_to_ticks
-from sentinel.poller import nap_seconds
+from sentinel.poller import GAPFILL_MAX_ATTEMPTS, gapfill_backoff_seconds, nap_seconds
 
 UTC = dt.timezone.utc
 
@@ -96,3 +96,19 @@ class TestNapSeconds:
         now = dt.datetime(2026, 7, 6, 13, 35, tzinfo=UTC)
         opens = dt.datetime(2026, 7, 6, 13, 30, tzinfo=UTC)
         assert nap_seconds(now, opens) == 0.0
+
+
+class TestGapfillBackoff:
+    """El gap-fill de arranque se reintenta con backoff exponencial: en todo
+    arranque en frío del clúster moría porque CoreDNS aún no resolvía Neon."""
+
+    def test_crece_exponencialmente(self):
+        assert gapfill_backoff_seconds(1, base=5) == 5
+        assert gapfill_backoff_seconds(2, base=5) == 10
+        assert gapfill_backoff_seconds(3, base=5) == 20
+
+    def test_la_espera_total_cubre_el_arranque_de_coredns(self):
+        # Con los valores por defecto se espera 5+10+20 = 35s antes de rendirse:
+        # CoreDNS resolvía antes de 25s en la medición del 2026-07-29.
+        total = sum(gapfill_backoff_seconds(i) for i in range(1, GAPFILL_MAX_ATTEMPTS))
+        assert total >= 25
