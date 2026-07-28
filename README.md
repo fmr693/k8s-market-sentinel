@@ -51,15 +51,20 @@ Esta arquitectura está **deliberadamente sobredimensionada** con fines demostra
 
 ## Arranque rápido
 
-```bash
-# 1. Configuración (los secretos nunca van al repo)
-cp .env.example .env          # rellena DATABASE_URL (Neon o local) y FRED_API_KEY
+> ¿Solo quieres **verlo funcionando** en una máquina que no es la tuya?
+> Ve a **[DEMO.md](DEMO.md)**: dashboards con datos reales en ~3 minutos.
 
-# 2. Postgres local de desarrollo (opcional: puedes apuntar directo a Neon)
+```bash
+# 1. Configuración. Si tienes la clave age del proyecto, el .env se genera solo
+#    desde el secreto CIFRADO del repo (no hay que copiar credenciales a mano):
+./scripts/env-from-secret.sh prod        # o 'local' para el Postgres del compose
+#    Sin la clave age: cp .env.example .env y rellenarlo a mano.
+
+# 2. Stack local de desarrollo (Postgres + Grafana + Prometheus + Pushgateway)
 docker compose -f docker-compose.dev.yml up -d
 
-# 3. Instalar y ejecutar
-pip install -e ".[dev]"
+# 3. Instalar y ejecutar (uv es lo que usa el CI; pip install -e también vale)
+uv sync --extra dev
 sentinel migrate              # aplica las migraciones SQL
 sentinel ingest-prices        # backfill del universo completo
 sentinel ingest-macro && sentinel ingest-fx && sentinel ingest-nav
@@ -70,11 +75,15 @@ sentinel poller               # (opcional) intradía en vivo, Ctrl+C para salir
 pytest                        # tests de la lógica pura
 
 # 4. Kubernetes local (k3d) — requiere cgroup v2 (ver DECISIONS.md #19)
-docker build -t sentinel:dev .
 # --api-port fija un puerto BAJO a propósito: los aleatorios de k3d caen en
 # rangos que WinNAT excluye y el clúster queda incomunicado (DECISIONS.md #22)
-k3d cluster create sentinel --api-port 6550 && k3d image import sentinel:dev -c sentinel
-kubectl apply -k .            # namespace + ConfigMap + Secret + CronJobs + poller + Grafana
+k3d cluster create sentinel --api-port 6550
+# No hace falta construir ni importar la imagen: el transformador de
+# kustomization.yaml apunta a la de GHCR, que es pública y el clúster se baja sola.
+kubectl apply -k .            # namespace + ConfigMaps + 7 CronJobs + poller + Grafana + Prometheus + Pushgateway
+# El Secret NO lo genera kustomize desde la fase 7a (decisión #39): vive cifrado
+# en el repo y se aplica descifrándolo al vuelo. Sin este paso, los pods no arrancan.
+sops -d deploy/secrets/sentinel-env.prod.yaml | kubectl apply -f -
 kubectl -n sentinel create -f deploy/k8s/job-migrate.yaml
 # Grafana: kubectl -n sentinel port-forward svc/grafana 3000:3000 → http://localhost:3000
 ```

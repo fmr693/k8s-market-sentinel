@@ -1,9 +1,12 @@
 """Dispatcher CLI (decisión #5: una imagen, varias caras).
 
 En K8s cada carga elegirá su cara vía `args:` del contenedor:
-    CronJob nocturno  → ["ingest-prices"]
-    Job de migración  → ["migrate"]
-    (futuro)          → ["poller"], ["nav"], ["alerts"]
+    CronJob nocturno  -> ["ingest-prices"]
+    Job de migración  -> ["migrate"]
+    Cara de calidad   -> ["check-quality"]
+
+(ASCII a propósito en este docstring: argparse lo imprime en `--help` y la
+consola de Windows es cp1252 — ver _salida_tolerante_a_consolas_viejas.)
 
 argparse y no typer/click: es un dispatcher de 3 subcomandos, la stdlib sobra.
 """
@@ -94,7 +97,26 @@ def _print_quality_summary(results: list[dict]) -> int:
     return 1 if broken else 0
 
 
+def _salida_tolerante_a_consolas_viejas() -> None:
+    """Evita que un carácter no ASCII tumbe el proceso en la consola de Windows.
+
+    Los textos de este repo usan '→', '≤' y '−' (ayuda del CLI y logs de los
+    ingestores). La consola de Windows escribe en cp1252, que no sabe
+    codificarlos: `sentinel --help` moría con UnicodeEncodeError y exit 1, y los
+    log.info de las ingestas escupían "--- Logging error ---". En la imagen
+    Docker (UTF-8) no pasa, así que el smoke test del CI —que corre en Linux—
+    nunca lo vio: un fallo que solo existe en la máquina de desarrollo.
+
+    errors='replace' conserva la codificación de la consola y degrada esos
+    caracteres a '?' en vez de romper. Donde ya hay UTF-8 no cambia nada.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
+
+
 def main(argv: list[str] | None = None) -> int:
+    _salida_tolerante_a_consolas_viejas()
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
