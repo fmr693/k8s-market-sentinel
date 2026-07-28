@@ -118,6 +118,32 @@ kubectl -n sentinel get pods,cronjobs,pvc
 Grafana: `kubectl -n sentinel port-forward svc/grafana 3000:3000`
 Prometheus: `kubectl -n sentinel port-forward svc/prometheus 9090:9090` → `/targets`
 
+### Qué esperar al arrancar en frío (medido el 2026-07-29)
+
+Partiendo del clúster parado, `k3d cluster start sentinel`:
+
+| Momento | t |
+|---|---|
+| Nodo `Ready` | ~22 s |
+| Poller `Running` | ~20 s |
+| Prometheus y Pushgateway listos | ~30 s |
+| Grafana lista y sirviendo | ~45 s |
+
+A los ~45 s: los 3 targets de Prometheus **UP**, ArgoCD **Synced/Healthy** solo, y
+Grafana leyendo Neon sin tocar nada (el Secret no cambió, así que **no** hace
+falta `rollout restart`; solo si acabas de cambiar el secreto).
+
+> **Reincidencia conocida: el gap-fill del poller falla en el arranque en frío.**
+> El poller intenta su gap-fill ~5 s después de nacer, cuando CoreDNS todavía no
+> resuelve → `Temporary failure in name resolution`. Degrada con elegancia ("los
+> ticks 1d cubrirán hoy") y sigue vivo, pero **el gap-fill solo se intenta al
+> arrancar**: no se reintenta hasta que el pod se reinicie. Si vienes de un
+> parón largo y quieres que recupere el intradía perdido:
+>
+> ```bash
+> kubectl -n sentinel rollout restart deploy/poller   # un minuto después del arranque
+> ```
+
 ### GitOps (opcional, +5 min) — "desplegar = hacer commit"
 ```bash
 kubectl create namespace argocd
