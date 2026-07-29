@@ -31,6 +31,9 @@ resources:
   - deploy/k8s/grafana.yaml
   - deploy/k8s/prometheus.yaml
   - deploy/k8s/pushgateway.yaml
+  # Túnel de demo (fase 12). Se despliega con replicas: 0 — existe en el clúster
+  # pero apagado; se enciende a mano solo mientras dura la demo (ver su cabecera).
+  - deploy/k8s/cloudflared.yaml
 
 # Transformador de imagen: los manifests de deploy/k8s/ referencian el nombre
 # neutro `sentinel:dev` (el que usa el flujo local con `k3d image import`);

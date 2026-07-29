@@ -187,6 +187,52 @@ kubectl -n sentinel logs job/refresh-check-quality | tail -10
 
 ---
 
+## Enseñarlo a distancia — el interruptor de demo
+
+Para que alguien vea los dashboards **sin estar en tu red**: un pod de
+`cloudflared` abre una conexión **saliente** a Cloudflare y publica la Grafana
+en una URL `https` aleatoria. No se abre ningún puerto del router, no hace falta
+IP pública y funciona detrás de CGNAT.
+
+Está desplegado con **`replicas: 0`**: existe en el clúster, pero apagado. Es un
+interruptor, no una puerta.
+
+```bash
+# 1. Encender
+kubectl -n sentinel scale deploy/cloudflared --replicas=1
+
+# 2. Leer la URL (tarda ~10 s en aparecer)
+kubectl -n sentinel logs deploy/cloudflared | grep trycloudflare
+
+# 3. Al terminar — IMPORTANTE
+kubectl -n sentinel scale deploy/cloudflared --replicas=0
+```
+
+Quien abra esa URL entra **sin login y en modo lectura**, y aterriza
+directamente en el dashboard *CEF Sentinel*. Añadiendo `?kiosk` a la URL se
+oculta toda la navegación de Grafana y queda solo el dashboard.
+
+> **Por qué hay que apagarlo.** Un *quick tunnel* no admite Cloudflare Access,
+> así que delante de Grafana solo está (a) que la URL es inadivinable y (b) que
+> el visitante no puede escribir. Suficiente para una ventana corta y vigilada;
+> no para dejarlo encendido sin mirar — una Grafana pública la encuentran los
+> escáneres automáticos en horas, y las CVEs graves se saltan el login.
+>
+> La URL **cambia en cada encendido**: es efímera por diseño.
+>
+> El día que haya dominio propio, se sustituye el flag `--url` por un túnel con
+> nombre y se pone **Cloudflare Access** delante (gratis hasta 50 usuarios). Ahí
+> sí puede quedarse encendido, y entonces el acceso anónimo sobra porque el
+> portero ya filtra quién pasa. Cambia la configuración del contenedor, no la
+> arquitectura.
+
+**Lo que NO ve un visitante:** el pod de Grafana solo tiene la credencial
+`grafana_ro` (solo lectura sobre Neon) — no lleva `DATABASE_URL` de owner, ni la
+clave de FRED, ni los tokens de Telegram. Son dos capas de solo-lectura
+independientes, y es la decisión #28 pagando dividendos.
+
+---
+
 ## Si algo falla
 
 | Síntoma | Causa y arreglo |
@@ -202,6 +248,8 @@ kubectl -n sentinel logs job/refresh-check-quality | tail -10
 | Prometheus en CrashLoop | Falta `fsGroup: 65534` (el PVC nace de root y prom corre como `nobody`). Ya está en el manifest. |
 | Cambié `prometheus.yml` y no se entera | El ConfigMap tiene nombre estable, así que el pod no se reinicia: `POST /-/reload` o borra el pod. |
 | Panel de Grafana vacío | Comprueba primero por SQL si hay dato; puede ser real (p. ej. fin de semana). |
+| Toqué algo con `kubectl` y se deshizo solo | ArgoCD hizo su trabajo: revierte toda deriva respecto a git. **Desplegar es hacer commit** — no hay atajo. La única excepción declarada es el escalado de `cloudflared` (`ignoreDifferences`). |
+| El túnel pide login | El clúster no tiene aún el commit con las env vars de visitante, o el pod de Grafana arrancó antes que ellas: `kubectl -n sentinel rollout restart deploy/grafana`. |
 
 ---
 

@@ -53,6 +53,29 @@ spec:
             # Sin registro ni usuarios extra: herramienta personal.
             - name: GF_USERS_ALLOW_SIGN_UP
               value: "false"
+            # --- Acceso de visitante (fase 12) ---------------------------------
+            # El visitante entra SIN login y en modo lectura. Por qué así y no un
+            # usuario "invitado" creado en la UI: esta Grafana no tiene PVC (ver
+            # cabecera) → los usuarios viven en la SQLite del contenedor y se
+            # evaporan en cada reinicio. Como env var es CONFIGURACIÓN: viaja por
+            # git, la aplica ArgoCD y sobrevive a todo. Misma regla de siempre —
+            # si no está en el repo, no existe.
+            #
+            # Doble solo-lectura, independiente: el rol Viewer de Grafana no puede
+            # editar nada, y por debajo el datasource entra a Neon con grafana_ro,
+            # que tampoco puede escribir. El admin sigue protegido por password.
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: "Viewer"
+            # Explícito aunque sea el default: un Viewer NO debe poder abrir
+            # Explore y lanzar SQL a mano contra Neon.
+            - name: GF_USERS_VIEWERS_CAN_EDIT
+              value: "false"
+            # El visitante aterriza directamente en el dashboard del producto, sin
+            # navegar el menú. La ruta es la del ConfigMap montado abajo.
+            - name: GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH
+              value: /var/lib/grafana/dashboards/cef-sentinel.json
           volumeMounts:
             - name: provisioning-datasources
               mountPath: /etc/grafana/provisioning/datasources

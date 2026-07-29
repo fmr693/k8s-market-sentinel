@@ -1,0 +1,65 @@
+# Túnel de demo hacia internet (fase 12) — cloudflared en modo "quick tunnel".
+#
+# QUÉ HACE: abre una conexión SALIENTE a Cloudflare y publica el Service de
+# Grafana en una URL https aleatoria (*.trycloudflare.com). No se abre ningún
+# puerto en el router, no hace falta IP pública y funciona detrás de CGNAT —
+# el pod llama hacia fuera, nadie llama hacia dentro.
+#
+# POR QUÉ replicas: 0 POR DEFECTO. Esto es un INTERRUPTOR DE DEMO, no una
+# puerta permanente. Un quick tunnel NO admite Cloudflare Access, así que lo
+# único que hay delante de Grafana es (a) que la URL es inadivinable y (b) que
+# el visitante entra en modo lectura. Eso basta para una ventana corta y
+# vigilada; no para dejarlo encendido sin mirar. Con replicas: 0, el estado
+# deseado en git es "apagado": si el clúster se reinicia, NO se reabre solo.
+#
+#   Encender:  kubectl -n sentinel scale deploy/cloudflared --replicas=1
+#   La URL:    kubectl -n sentinel logs deploy/cloudflared | grep trycloudflare
+#   Apagar:    kubectl -n sentinel scale deploy/cloudflared --replicas=0
+#
+# El escalado a mano SOBREVIVE a ArgoCD gracias al ignoreDifferences declarado
+# en deploy/gitops/argocd/application-sentinel-prod.yaml — sin él, el selfHeal
+# devolvería el Deployment a 0 réplicas en mitad de la demo.
+#
+# CUANDO HAYA DOMINIO: se sustituye el flag --url por un túnel con nombre
+# (`tunnel run` + token en el Secret cifrado) y se pone Cloudflare Access
+# delante. Cambia la configuración de este contenedor, no la arquitectura:
+# el Deployment, el Service destino y el flujo GitOps siguen igual.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  labels:
+    app.kubernetes.io/part-of: k8s-market-sentinel
+spec:
+  replicas: 0 # apagado por defecto: ver cabecera
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflared
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cloudflared
+        app.kubernetes.io/part-of: k8s-market-sentinel
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532 # la imagen es distroless y trae el usuario nonroot
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2025.7.0
+          args:
+            - tunnel
+            - --no-autoupdate # en un contenedor, actualizar = cambiar el tag
+            - --url
+            - http://grafana:3000 # el Service in-cluster, por DNS de K8s
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

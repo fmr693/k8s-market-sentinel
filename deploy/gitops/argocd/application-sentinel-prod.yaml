@@ -24,6 +24,20 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: sentinel
+  # El túnel de demo (deploy/k8s/cloudflared.yaml) se declara con replicas: 0 y
+  # se enciende A MANO mientras dura la demo. Sin esta excepción, el selfHeal
+  # revertiría el `kubectl scale --replicas=1` a los pocos minutos y el túnel
+  # se caería en mitad de la demostración.
+  #
+  # Es la única deriva manual que se tolera en todo el despliegue, y es
+  # deliberada: el estado deseado en git sigue siendo "apagado" (si el clúster
+  # se recrea, el túnel NO se reabre solo), pero encenderlo no exige un commit.
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: cloudflared
+      jsonPointers:
+        - /spec/replicas
   syncPolicy:
     automated:
       prune: true
