@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arquitectura del flujo de datos — k8s-market-sentinel</title>
+<style>
+  :root{
+    --bg:#F6F8FA; --surface:#FFFFFF; --surface-2:#EEF2F6; --surface-3:#E3E9EF;
+    --ink:#15202B; --ink-2:#4A5563; --ink-3:#78879A;
+    --rule:#D8E0E8; --rule-strong:#9FB0C0;
+    --accent:#0E6E78; --accent-ink:#0A555D; --accent-soft:#DAEDEF;
+    --bronze:#94592F; --bronze-soft:#F3E6DA;
+    --silver:#5C6E7D; --silver-soft:#E6EBEF;
+    --gold:#8F6510; --gold-soft:#F6ECD6;
+    --ext:#61468A; --ext-soft:#EDE6F5;
+    --shadow:0 1px 2px rgba(16,32,48,.05), 0 8px 22px -14px rgba(16,32,48,.28);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0C1219; --surface:#131B24; --surface-2:#19232E; --surface-3:#212F3C;
+      --ink:#E6EDF4; --ink-2:#A8B7C5; --ink-3:#7C8C9B;
+      --rule:#24303D; --rule-strong:#4A5E70;
+      --accent:#55C3CD; --accent-ink:#8CDAE2; --accent-soft:#123039;
+      --bronze:#CF9267; --bronze-soft:#32241A;
+      --silver:#A6B8C6; --silver-soft:#1D2732;
+      --gold:#DCB55E; --gold-soft:#2E2718;
+      --ext:#B49BE0; --ext-soft:#231C32;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 26px -16px rgba(0,0,0,.8);
+    }
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:ui-sans-serif,"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif;
+    font-size:16px; line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1120px; margin:0 auto; padding:0 28px 90px}
+  code,.mono{font-family:ui-monospace,"Cascadia Mono","Cascadia Code",Consolas,"SF Mono",monospace}
+
+  /* ---------- cabecera ---------- */
+  header.top{padding:64px 0 34px; border-bottom:1px solid var(--rule)}
+  .eyebrow{font-family:ui-monospace,Consolas,monospace; font-size:11px; letter-spacing:.17em;
+    text-transform:uppercase; color:var(--accent); margin:0 0 16px}
+  h1{font-size:clamp(2rem,4.6vw,2.9rem); line-height:1.08; letter-spacing:-.028em;
+    font-weight:660; margin:0 0 16px; max-width:20ch; text-wrap:balance}
+  .lede{font-size:1.08rem; color:var(--ink-2); max-width:66ch; margin:0}
+  .lede strong{color:var(--ink); font-weight:600}
+
+  h2{font-size:1.45rem; letter-spacing:-.02em; font-weight:640; margin:0 0 6px; text-wrap:balance}
+  .sub{color:var(--ink-2); margin:0 0 30px; max-width:68ch}
+  section{padding-top:62px}
+
+  /* ---------- rejilla flujo + notas ---------- */
+  .cols{display:grid; grid-template-columns:minmax(0,1.12fr) minmax(0,.88fr); gap:26px; align-items:start}
+
+  /* ---------- caja ---------- */
+  .box{border:1.5px solid var(--rule-strong); border-radius:11px; background:var(--surface);
+    box-shadow:var(--shadow); overflow:hidden}
+  .box.k{border-color:var(--accent)}
+  .box.d{border-color:var(--gold)}
+  .box-hd{padding:13px 18px; background:var(--surface-2); border-bottom:1px solid var(--rule);
+    display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap}
+  .box-hd .t{font-weight:660; font-size:1.02rem; letter-spacing:-.012em}
+  .box-hd .tag{font-family:ui-monospace,Consolas,monospace; font-size:10.5px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--ink-3)}
+  .box.k .box-hd{background:var(--accent-soft)} .box.k .box-hd .t{color:var(--accent-ink)}
+  .box.k .box-hd .tag{color:var(--accent)}
+  .box.d .box-hd{background:var(--gold-soft)} .box.d .box-hd .t{color:var(--gold)}
+  .box.d .box-hd .tag{color:var(--gold)}
+  .box-bd{padding:16px 18px}
+  .box-bd > p{margin:0 0 12px; font-size:.92rem; color:var(--ink-2)}
+  .box-bd > p:last-child{margin-bottom:0}
+
+  /* chips internos */
+  .chips{display:flex; flex-wrap:wrap; gap:8px; margin:0 0 12px}
+  .chips:last-child{margin-bottom:0}
+  .chip{border:1px solid var(--rule); background:var(--surface-2); border-radius:7px;
+    padding:7px 11px; font-size:.83rem; line-height:1.35; min-width:0}
+  .chip b{display:block; font-family:ui-monospace,Consolas,monospace; font-size:.82rem;
+    font-weight:640; color:var(--ink)}
+  .chip span{color:var(--ink-3); font-size:.78rem}
+
+  /* sub-cajas (carriles) */
+  .lanes{display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:11px; margin-bottom:13px}
+  .lane{border:1px dashed var(--rule-strong); border-radius:8px; padding:11px 13px; background:var(--surface-2)}
+  .lane .h{font-family:ui-monospace,Consolas,monospace; font-size:.8rem; font-weight:640;
+    color:var(--accent-ink); margin:0 0 3px}
+  .lane .d{font-size:.82rem; color:var(--ink-2); line-height:1.45; margin:0}
+
+  /* medallón horizontal */
+  .medal{display:flex; align-items:stretch; gap:0; flex-wrap:wrap; margin-bottom:13px}
+  .med{flex:1 1 130px; border:1.5px solid; border-radius:8px; padding:11px 12px; background:var(--surface)}
+  .med .n{font-family:ui-monospace,Consolas,monospace; font-weight:660; font-size:.88rem; margin:0 0 2px}
+  .med .r{font-size:.78rem; color:var(--ink-2); line-height:1.4; margin:0}
+  .med-b{border-color:var(--bronze); background:var(--bronze-soft)} .med-b .n{color:var(--bronze)}
+  .med-s{border-color:var(--silver); background:var(--silver-soft)} .med-s .n{color:var(--silver)}
+  .med-g{border-color:var(--gold);   background:var(--gold-soft)}   .med-g .n{color:var(--gold)}
+  .medsep{flex:0 0 26px; display:flex; align-items:center; justify-content:center;
+    color:var(--rule-strong); font-size:16px; font-weight:700}
+
+  /* ---------- flecha vertical ---------- */
+  .arrow-row{display:grid; grid-template-columns:minmax(0,1.12fr) minmax(0,.88fr); gap:26px}
+  .arrow{grid-column:1; position:relative; height:66px; display:flex; align-items:center; justify-content:center}
+  .arrow::before{content:""; position:absolute; left:50%; top:0; bottom:11px; width:2px;
+    background:var(--rule-strong); transform:translateX(-50%)}
+  .arrow::after{content:""; position:absolute; left:50%; bottom:0; transform:translateX(-50%);
+    width:0; height:0; border-left:7px solid transparent; border-right:7px solid transparent;
+    border-top:11px solid var(--rule-strong)}
+  .arrow .lb{position:relative; z-index:1; background:var(--bg); padding:4px 13px;
+    font-family:ui-monospace,Consolas,monospace; font-size:.735rem; letter-spacing:.03em;
+    color:var(--ink-2); border:1px solid var(--rule); border-radius:20px; text-align:center;
+    max-width:94%}
+
+  /* ---------- nota lateral ---------- */
+  .note{border-left:3px solid var(--accent); background:var(--surface-2);
+    border-radius:0 9px 9px 0; padding:14px 17px}
+  .note .h{font-family:ui-monospace,Consolas,monospace; font-size:10.5px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--accent); margin:0 0 6px}
+  .note p{margin:0; font-size:.895rem; color:var(--ink-2); line-height:1.56}
+  .note p + p{margin-top:9px}
+  .note strong{color:var(--ink); font-weight:600}
+  .note.warn{border-left-color:var(--bronze)}
+  .note.warn .h{color:var(--bronze)}
+
+  /* ---------- andamiaje: mini diagramas ---------- */
+  .rig{display:flex; flex-direction:column; gap:18px}
+  .rigrow{border:1px solid var(--rule); border-radius:11px; background:var(--surface);
+    box-shadow:var(--shadow); padding:18px 20px}
+  .rigrow > h3{margin:0 0 3px; font-size:1rem; font-weight:640; letter-spacing:-.01em}
+  .rigrow > .q{margin:0 0 15px; font-size:.87rem; color:var(--ink-3)}
+  .chain{display:flex; align-items:center; flex-wrap:wrap; gap:0 4px}
+  .node{border:1.5px solid var(--rule-strong); border-radius:8px; padding:8px 13px;
+    background:var(--surface-2); font-family:ui-monospace,Consolas,monospace;
+    font-size:.82rem; font-weight:600; white-space:nowrap}
+  .node.k{border-color:var(--accent); background:var(--accent-soft); color:var(--accent-ink)}
+  .node.e{border-color:var(--ext); background:var(--ext-soft); color:var(--ext)}
+  .node.d{border-color:var(--gold); background:var(--gold-soft); color:var(--gold)}
+  .ha{flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:2px;
+    padding:0 6px; min-width:76px}
+  .ha .l{font-family:ui-monospace,Consolas,monospace; font-size:.66rem; color:var(--ink-3);
+    letter-spacing:.04em; white-space:nowrap}
+  .ha .line{position:relative; width:100%; height:2px; background:var(--rule-strong)}
+  .ha .line::after{content:""; position:absolute; right:-1px; top:50%; transform:translateY(-50%);
+    width:0; height:0; border-top:5px solid transparent; border-bottom:5px solid transparent;
+    border-left:9px solid var(--rule-strong)}
+  .rigrow > p.why{margin:14px 0 0; padding-top:13px; border-top:1px solid var(--rule);
+    font-size:.885rem; color:var(--ink-2)}
+  .rigrow > p.why b{color:var(--ink); font-weight:600}
+
+  /* ---------- tabla ---------- */
+  .tw{overflow-x:auto; border:1px solid var(--rule); border-radius:11px; background:var(--surface);
+    box-shadow:var(--shadow)}
+  table{border-collapse:collapse; width:100%; min-width:600px; font-size:.9rem}
+  th,td{text-align:left; padding:11px 16px; border-bottom:1px solid var(--rule); vertical-align:top}
+  thead th{font-family:ui-monospace,Consolas,monospace; font-size:10.5px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--ink-3); font-weight:600; background:var(--surface-2)}
+  tbody tr:last-child td{border-bottom:0}
+  td.m{font-family:ui-monospace,Consolas,monospace; font-size:.83rem; white-space:nowrap;
+    font-variant-numeric:tabular-nums}
+  td .n2{color:var(--ink-3)}
+
+  /* ---------- cierre ---------- */
+  .close{border-left:3px solid var(--accent); background:var(--surface-2); padding:20px 24px;
+    border-radius:0 10px 10px 0; margin-top:34px}
+  .close p{margin:0; font-size:1.02rem; line-height:1.6}
+  .close p+p{margin-top:9px; color:var(--ink-2); font-size:.93rem}
+  footer{margin-top:58px; padding-top:20px; border-top:1px solid var(--rule);
+    font-family:ui-monospace,Consolas,monospace; font-size:.8rem; color:var(--ink-3)}
+
+  @media (max-width:840px){
+    .cols,.arrow-row{grid-template-columns:1fr}
+    .arrow{grid-column:1; height:56px}
+    .note{margin-top:14px}
+  }
+  @media print{
+    body{background:#fff} .box,.rigrow,.tw{box-shadow:none} section{page-break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">k8s-market-sentinel</p>
+  <h1>Cómo circula el dato</h1>
+  <p class="lede">De una llamada a una API pública hasta un número pintado en un panel.
+    A la izquierda el <strong>flujo</strong>; a la derecha, en paralelo, las
+    <strong>aclaraciones</strong> de por qué cada pieza está donde está.</p>
+</header>
+
+<section>
+  <h2>El flujo principal</h2>
+  <p class="sub">Cuatro etapas y tres fronteras. Todo lo demás del proyecto es andamiaje alrededor de esto.</p>
+
+  <!-- ETAPA 1 -->
+  <div class="cols">
+    <div class="box">
+      <div class="box-hd"><span class="t">Fuentes externas</span><span class="tag">fuera · internet</span></div>
+      <div class="box-bd">
+        <div class="chips">
+          <div class="chip"><b>Yahoo Finance</b><span>precios diarios e intradía, distribuciones, NAV de contraste</span></div>
+          <div class="chip"><b>CEFConnect</b><span>NAV oficial de cada fondo</span></div>
+          <div class="chip"><b>FRED</b><span>diferencial high-yield, Treasury 10Y, PIB</span></div>
+          <div class="chip"><b>frankfurter / BCE</b><span>fixing oficial EUR/USD</span></div>
+        </div>
+        <p>Cuatro APIs públicas y gratuitas. Ninguna avisa cuando cambia algo.</p>
+      </div>
+    </div>
+    <aside class="note">
+      <p class="h">Aclaración</p>
+      <p>Es la única parte que <strong>no controlas</strong>: pueden cambiar el formato, meter huecos
+        o dejar de responder sin avisar.</p>
+      <p>Por eso cada fuente vive en <strong>su propio trabajo separado</strong>. Si CEFConnect se cae
+        una noche, los precios y la macro entran igual: el fallo queda acotado a una pieza.</p>
+    </aside>
+  </div>
+
+  <div class="arrow-row"><div class="arrow"><span class="lb">HTTPS · el obrero pide, nadie empuja</span></div></div>
+
+  <!-- ETAPA 2 -->
+  <div class="cols">
+    <div class="box k">
+      <div class="box-hd"><span class="t">Kubernetes — el clúster</span><span class="tag">dentro · desechable</span></div>
+      <div class="box-bd">
+        <div class="lanes">
+          <div class="lane">
+            <p class="h">Carril lento</p>
+            <p class="d">7 CronJobs entre las 16:45 y las 23:45. Uno por fuente, más el de calidad.
+              Grano diario.</p>
+          </div>
+          <div class="lane">
+            <p class="h">Carril rápido</p>
+            <p class="d">El poller: un proceso vivo que pide velas de 1 minuto cada 75 s mientras
+              la bolsa está abierta.</p>
+          </div>
+        </div>
+        <p>Los trabajadores del carril lento son <strong>pods efímeros</strong>: nacen a su hora,
+          piden, limpian, guardan y mueren. No conservan nada entre ejecuciones.</p>
+      </div>
+    </div>
+    <aside class="note">
+      <p class="h">Aclaración</p>
+      <p><strong>Kubernetes no sabe que Neon existe.</strong> Solo arranca contenedores a su hora y
+        les entrega la dirección de la base en un sobre cerrado que nunca abre.</p>
+      <p>Quien habla con la base de datos es el código Python de dentro. Kubernetes se limita a
+        que alguien fiche puntual y, si se desmaya, a mandar a otro.</p>
+    </aside>
+  </div>
+
+  <div class="arrow-row"><div class="arrow"><span class="lb">INSERT en bronze + UPSERT en silver · misma transacción</span></div></div>
+
+  <!-- ETAPA 3 -->
+  <div class="cols">
+    <div class="box d">
+      <div class="box-hd"><span class="t">Neon — PostgreSQL gestionado</span><span class="tag">fuera · permanente</span></div>
+      <div class="box-bd">
+        <div class="medal">
+          <div class="med med-b"><p class="n">bronze</p><p class="r">El JSON tal cual llegó. Solo se añade.</p></div>
+          <div class="medsep">→</div>
+          <div class="med med-s"><p class="n">silver</p><p class="r">Limpio, tipado y deduplicado por clave natural.</p></div>
+          <div class="medsep">→</div>
+          <div class="med med-g"><p class="n">gold</p><p class="r">Vistas: descuento, z-score, yield, calidad.</p></div>
+        </div>
+        <p>Además de guardar, <strong>calcula</strong>: las vistas de gold se ejecutan en el momento
+          en que alguien pregunta.</p>
+      </div>
+    </div>
+    <aside class="note">
+      <p class="h">Aclaración</p>
+      <p>Neon <strong>no es un bucket</strong>. Un bucket guarda ficheros y no sabe qué hay dentro;
+        esto es una base de datos que entiende su contenido y sabe operar con él.</p>
+      <p>Por eso aquí <strong>no hace falta Spark ni ningún motor aparte</strong>: el cálculo más
+        pesado del proyecto —el z-score sobre 252 sesiones— son 25 líneas de SQL sobre 424.000 filas.
+        Postgres las resuelve en milisegundos.</p>
+    </aside>
+  </div>
+
+  <div class="arrow-row"><div class="arrow"><span class="lb">SELECT · rol grafana_ro, solo lectura</span></div></div>
+
+  <!-- ETAPA 4 -->
+  <div class="cols">
+    <div class="box k">
+      <div class="box-hd"><span class="t">Grafana — el visor</span><span class="tag">dentro · desechable</span></div>
+      <div class="box-bd">
+        <div class="chips">
+          <div class="chip"><b>15 paneles → silver</b><span>dato directo: series de precio, macro, NAV</span></div>
+          <div class="chip"><b>16 paneles → gold</b><span>dato calculado: z-score, descuento, yield</span></div>
+          <div class="chip"><b>1 panel → bronze</b><span>registro de descargas</span></div>
+        </div>
+        <p>Cada panel es una consulta SQL guardada en un fichero JSON del repositorio.</p>
+      </div>
+    </div>
+    <aside class="note">
+      <p class="h">Aclaración</p>
+      <p><strong>Grafana no calcula nada.</strong> Recibe el número ya decidido y lo dibuja.</p>
+      <p>Eso tiene dos consecuencias buenas: entra con un usuario de <strong>solo lectura</strong>
+        —no puede romper lo que enseña, aunque permita escribir SQL clicando— y podrías cambiarlo
+        por otra herramienta sin perder una sola regla de negocio.</p>
+    </aside>
+  </div>
+</section>
+
+<section>
+  <h2>El andamiaje</h2>
+  <p class="sub">Tres sistemas que no tocan el dato de mercado, pero sin los cuales nada de lo anterior
+    se sostendría. Cada uno responde a una pregunta distinta.</p>
+
+  <div class="rig">
+
+    <div class="rigrow">
+      <h3>De dónde sale el código que se ejecuta</h3>
+      <p class="q">Los pods nacen vacíos. Alguien tiene que darles un cuerpo.</p>
+      <div class="chain">
+        <span class="node e">GitHub Actions</span>
+        <span class="ha"><span class="l">al etiquetar v*</span><span class="line"></span></span>
+        <span class="node e">GHCR</span>
+        <span class="ha"><span class="l">docker pull</span><span class="line"></span></span>
+        <span class="node k">Pod</span>
+      </div>
+      <p class="why"><b>Por qué así:</b> una sola imagen contiene todos los comandos —poller, los seis
+        ingestores y el runner de calidad—. Kubernetes elige qué cara ejecutar al arrancar cada pod.
+        Así el código y el esquema de la base viajan siempre juntos, sin piezas descompasadas de versión.</p>
+    </div>
+
+    <div class="rigrow">
+      <h3>Quién decide qué debe estar corriendo</h3>
+      <p class="q">Sin esto, lo que corre es «lo último que aplicó alguien». Nadie sabe qué, ni cuándo.</p>
+      <div class="chain">
+        <span class="node e">git (repositorio)</span>
+        <span class="ha"><span class="l">vigila</span><span class="line"></span></span>
+        <span class="node k">ArgoCD</span>
+        <span class="ha"><span class="l">corrige</span><span class="line"></span></span>
+        <span class="node k">El clúster</span>
+      </div>
+      <p class="why"><b>Por qué así:</b> el repositorio deja de ser documentación de lo que hay y pasa a
+        <b>ser</b> lo que hay. Desplegar se convierte en hacer un commit, y si alguien toca algo a mano
+        en el clúster, ArgoCD lo revierte solo.
+        <br><b>Su límite:</b> garantiza que los objetos del clúster coincidan con git — no que un proceso
+        ya arrancado relea su configuración. Un pod vivo conserva las variables que recibió al nacer.</p>
+    </div>
+
+    <div class="rigrow">
+      <h3>Quién vigila que todo esto funcione</h3>
+      <p class="q">Los datos pueden parecer correctos mientras el sistema está roto: el dato viejo sigue ahí.</p>
+      <div class="chain">
+        <span class="node k">Poller</span>
+        <span class="ha"><span class="l">/metrics</span><span class="line"></span></span>
+        <span class="node k">Prometheus</span>
+      </div>
+      <div class="chain" style="margin-top:10px">
+        <span class="node k">CronJobs</span>
+        <span class="ha"><span class="l">empujan al morir</span><span class="line"></span></span>
+        <span class="node k">Pushgateway</span>
+        <span class="ha"><span class="l">recoge</span><span class="line"></span></span>
+        <span class="node k">Prometheus</span>
+      </div>
+      <p class="why"><b>Por qué dos caminos:</b> Prometheus funciona preguntando cada pocos segundos.
+        Al poller le da tiempo a contestar porque está vivo; los CronJobs viven treinta segundos y morirían
+        antes de que les preguntara. Por eso ellos <b>dejan el recado en un buzón</b> y Prometheus lo
+        recoge cuando pasa.</p>
+    </div>
+
+  </div>
+</section>
+
+<section>
+  <h2>Referencia rápida: quién corre y cuándo</h2>
+  <p class="sub">Horarios en Europe/Madrid, declarados en los manifiestos. Una ejecución perdida no se
+    recupera, pero da igual: el backfill idempotente tapa el hueco en la siguiente.</p>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Hora</th><th>Trabajo</th><th>Qué trae</th></tr></thead>
+      <tbody>
+        <tr><td class="m">16:45</td><td class="m">ingest-fx</td><td>Fixing oficial EUR/USD del BCE <span class="n2">— el definitivo, no la cotización de mercado</span></td></tr>
+        <tr><td class="m">23:05</td><td class="m">ingest-prices</td><td>Velas diarias de los 44 tickers</td></tr>
+        <tr><td class="m">23:10</td><td class="m">ingest-macro</td><td>Tres series de FRED</td></tr>
+        <tr><td class="m">23:15</td><td class="m">ingest-distributions</td><td>Distribuciones de los CEFs <span class="n2">— el recorte es la señal que importa</span></td></tr>
+        <tr><td class="m">23:20</td><td class="m">ingest-nav</td><td>NAV desde CEFConnect <span class="n2">— la pieza frágil, aislada</span></td></tr>
+        <tr><td class="m">23:20</td><td class="m">ingest-nav-proxy</td><td>NAV desde Yahoo <span class="n2">— la segunda opinión</span></td></tr>
+        <tr><td class="m">23:45</td><td class="m">check-quality</td><td>Siete comprobaciones declaradas en YAML <span class="n2">— si alguna falla, el trabajo queda en rojo</span></td></tr>
+        <tr><td class="m">cada 75 s</td><td class="m">poller</td><td>Velas de 1 minuto con la bolsa abierta <span class="n2">— el único proceso que no muere</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="close">
+    <p>La imagen es tonta y el clúster es listo.</p>
+    <p>El código Python apenas calcula; el SQL hace el trabajo intelectual; y Kubernetes no entiende
+      nada de finanzas — solo se asegura de que los obreros fichen a su hora. El clúster es desechable,
+      Neon es la memoria, y git es la verdad.</p>
+  </div>
+</section>
+
+<footer>
+  Medido contra el despliegue real · imagen 0.8.0 · 424.531 filas en Neon · 2026-07-29
+</footer>
+
+</div>
+</body>
+</html>
