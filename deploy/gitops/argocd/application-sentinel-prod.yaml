@@ -44,6 +44,15 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      # Hacen falta LAS DOS cosas, y confundirlas cuesta una demo:
+      #   - ignoreDifferences (arriba) = "no mires este campo para decidir si
+      #     hay deriva"  → evita que el selfHeal lo revierta.
+      #   - RespectIgnoreDifferences  = "y tampoco lo apliques al sincronizar"
+      #     → evita que un sync disparado por OTRA causa (un commit cualquiera)
+      #     reimponga el replicas: 0 del repo y apague el túnel a media demo.
+      # Sin la segunda, el túnel se cae en el siguiente push, que es justo
+      # cuando menos te lo esperas.
+      - RespectIgnoreDifferences=true
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
