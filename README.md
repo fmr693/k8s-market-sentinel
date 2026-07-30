@@ -16,7 +16,8 @@ Plataforma **Kubernetes-nativa** de vigilancia de CEFs (closed-end funds) de cr�
   - Fixing oficial EUR/USD del BCE (frankfurter).
 - **Poller intradía**: Deployment crash-only con calendario real de la NYSE (festivos, medias sesiones, DST transatlántico vía `exchange_calendars`), velas 1m en batch, sueño interrumpible y salida limpia con SIGTERM.
 - **Medallón sobre Postgres** (Neon, gestionado): `bronze` (crudo jsonb, append-only) → `silver` (tipado, deduplicado por clave natural) → `gold` (vistas: descuento con signo, z-score 252 sesiones, descuento intradía ESTIMADO, yield TTM sobre precio y sobre NAV, indicador Buffett).
-- **Grafana aprovisionado como código**: dashboards JSON y datasource en el repo, pod sin estado (ConfigMaps generados por kustomize), rol de Postgres **solo lectura** (`grafana_ro`, mínimo privilegio).
+- **Grafana aprovisionado como código**: dashboards JSON y datasource en el repo, pod sin estado (ConfigMaps generados por kustomize), rol de Postgres **solo lectura** (`grafana_ro`, mínimo privilegio). El **modo visitante** (entrar sin login, en rol de solo lectura, aterrizando directo en el dashboard) también es configuración versionada, no un usuario creado a mano: sin PVC, un usuario de la UI se evaporaría en el siguiente reinicio.
+- **Contexto, no números desnudos**: un nivel suelto ("diferencial de crédito 2,84 %") no se puede juzgar. La capa gold calcula **percentil, z-score y años de historia disponibles** de cada serie macro, y donde la fuente está limitada por licencia a una ventana de 3 años se añade una serie **no restringida con 40 años** como regla de medir — sin sustituir a la relevante, que sigue siendo la del semáforo.
 - **Calidad de dato declarativa**: los checks (frescura por fuente, NAVs rancios, divergencia entre fuentes) se **declaran en `config/quality_checks.yaml`** — añadir uno es editar YAML, el código no cambia; un runner los ejecuta en transacción READ ONLY, guarda el veredicto con su historial en gold y sale con código 1 si alguno falla. El NAV, la pieza frágil, tiene **segunda opinión**: se contrasta con el que publica Yahoo para el mismo fondo y `nav_quality` se degrada sola a `sospechoso` si discrepan más de un 2%.
 - **Kubernetes**: imagen única multi-comando (`sentinel migrate|ingest-prices|ingest-nav|ingest-nav-proxy|ingest-macro|ingest-fx|ingest-distributions|check-quality|poller`), 7 CronJobs del carril lento con `timeZone: Europe/Madrid`, Deployment del poller con liveness por fichero-latido, ConfigMap del universo de tickers y Secret generados con kustomize.
 
@@ -40,10 +41,11 @@ Plataforma **Kubernetes-nativa** de vigilancia de CEFs (closed-end funds) de cr�
 | 9 | Prometheus + PVC (observabilidad completa) | ✅ |
 | 10 | Calidad de dato como framework declarativo (checks en config, cross-check del NAV, panel "Data Quality") | ✅ |
 | 11 | Helm chart, score opcional, README final con guía de portado | ⬜ |
+| 12 | Acceso remoto: túnel `cloudflared` como interruptor de demo + Grafana en modo visitante | ✅ |
 
 > **Reencuadre (2026-07-08):** este proyecto no compite en producto financiero — compite en **arquitectura portable**. La tesis CEF es la carga útil demostrativa; el patrón (medallón, ingesta idempotente, config-driven, crash-only, GitOps) es lo que se deja a prueba de bombas y se puede aplicar a cualquier otro dominio de datos.
 
-El detalle vivo de cada decisión (con el porqué y las lecciones aprendidas) está en **[DECISIONS.md](DECISIONS.md)**; el contexto completo del proyecto, en **[PROJECT_BRIEF.md](PROJECT_BRIEF.md)**.
+El detalle vivo de cada decisión (con el porqué y las lecciones aprendidas) está en **[DECISIONS.md](DECISIONS.md)**; el contexto completo del proyecto, en **[PROJECT_BRIEF.md](PROJECT_BRIEF.md)**. Para entender **cómo circula el dato** de una API a un panel —quién hace qué, cómo y por qué— hay un diagrama autocontenido en **[docs/arquitectura.html](docs/arquitectura.html)** (se abre con doble clic, sin dependencias).
 
 ## Nota de honestidad arquitectónica
 
@@ -62,6 +64,9 @@ Lo que salva el dato en ese hueco no es el orquestador, sino el **backfill idemp
 
 > ¿Solo quieres **verlo funcionando** en una máquina que no es la tuya?
 > Ve a **[DEMO.md](DEMO.md)**: dashboards con datos reales en ~3 minutos.
+> Ahí está también el **interruptor de demo** para enseñarlo a distancia
+> (`cloudflared`, sin abrir puertos ni IP pública) — con el aviso de por qué
+> se apaga al terminar: la URL de un *quick tunnel* no es un secreto.
 
 ```bash
 # 1. Configuración. Si tienes la clave age del proyecto, el .env se genera solo
