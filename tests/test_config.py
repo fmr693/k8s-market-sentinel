@@ -88,3 +88,26 @@ class TestNavCheck:
         u = load_universe(_write(tmp_path, BASE_YAML))  # BASE_YAML no tiene nav_check
         assert u.nav_check == {}
         assert u.nav_proxy_tickers == []
+
+
+class TestMacroHistoryStart:
+    """El backfill macro arranca antes que el de precios: una serie macro sirve
+    para dar CONTEXTO histórico y ahí cada década cuenta (con 11 años no se ve
+    2008). Clave opcional: sin ella cae en price_history_start."""
+
+    def test_usa_su_clave_propia_si_existe(self, tmp_path):
+        data = {**BASE_YAML, "defaults": {**BASE_YAML["defaults"],
+                                          "macro_history_start": "1986-01-01"}}
+        u = load_universe(_write(tmp_path, data))
+        assert u.macro_history_start == dt.date(1986, 1, 1)
+        assert u.macro_start == dt.date(1986, 1, 1)
+        # y NO arrastra el de precios, que sigue siendo el suyo
+        assert u.macro_start != u.price_history_start
+
+    def test_sin_la_clave_cae_en_el_de_precios(self, tmp_path):
+        # ConfigMap viejo: el comportamiento no cambia (compat hacia atrás)
+        data = {**BASE_YAML, "defaults": {k: v for k, v in BASE_YAML["defaults"].items()
+                                          if k != "macro_history_start"}}
+        u = load_universe(_write(tmp_path, data))
+        assert u.macro_history_start is None
+        assert u.macro_start == u.price_history_start

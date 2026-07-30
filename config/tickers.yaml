@@ -60,6 +60,20 @@ stocks: # Acciones sueltas a vigilar (2026-07-07). SIN NAV: solo precio/variaci�
 
 fred_series: # Series macro de FRED (ingestor propio, no yfinance)
   - BAMLH0A0HYM2 # ICE BofA US High Yield OAS (diferencial de crédito HY)
+  # Contexto histórico LARGO del estrés de crédito (añadida 2026-07-30).
+  # Por qué hace falta: la serie de arriba es la buena para CEFs de crédito,
+  # pero FRED solo publica una ventana móvil de ~3 años (restricción de
+  # licencia de ICE, confirmada en los metadatos: observation_start es
+  # 2023-07-31, no es que la API recorte — el dato no existe ahí). Con 3 años
+  # no se puede juzgar si un nivel es alto o bajo: 2,84% parece "normal" en
+  # esa ventana y es históricamente estrecho.
+  # BAA10Y llega a 1986 (40 años) y NO está restringida. Es grado de inversión
+  # (Baa, el escalón más bajo) sobre el Treasury 10Y, así que sus NIVELES son
+  # más bajos que los de HY — no son intercambiables. Lo que aporta es la
+  # FORMA: se ven 2008, 2020 y cada episodio de estrés, y eso da la escala
+  # que la ventana corta no puede dar.
+  # Añadirla es editar este YAML: el ingestor y el esquema no cambian.
+  - BAA10Y # Moody's Baa - Treasury 10Y (proxy de estrés de crédito, 1986→)
   - DGS10 # Treasury a 10 años
   - GDP # PIB nominal trimestral (denominador del Buffett)
 
@@ -103,6 +117,23 @@ defaults:
   # Solape para series FRED: mayor que el de precios porque FRED revisa
   # hacia atrás (el PIB se revisa meses después de publicarse).
   macro_overlap_days: 30
+  # Inicio del backfill de las MACRO, separado del de precios (2015) porque el
+  # criterio es otro: una serie macro existe para dar CONTEXTO histórico, y con
+  # 11 años no se ve ni una crisis de verdad.
+  #
+  # ¿Por qué 2007 y no más atrás? Es el mínimo que incluye 2008, que es LA
+  # referencia de cómo se ve un susto de crédito real (BAA10Y llegó a 6,16%
+  # frente al 1,62% de hoy). Con eso basta para juzgar si el nivel actual es
+  # alto o bajo; traerse los años 80 y 90 no añade criterio y alarga el primer
+  # arranque. Escape: bajar esta fecha si algún día interesa más profundidad.
+  #
+  # OJO — esto solo aplica a un backfill INICIAL. El patrón "¿cuál es mi último
+  # dato?" solo extiende hacia ADELANTE: nunca rellena hueco por detrás del
+  # primer registro. Si una serie ya está ingerida, cambiar esta fecha no la
+  # afecta; hay que borrar esa serie de silver y dejar que se reingiera.
+  # Cuánto se PINTA es otra cosa y no depende de aquí: lo decide el selector de
+  # tiempo de Grafana, porque los paneles filtran por el rango elegido.
+  macro_history_start: "2007-01-01"
   # Cadencia del poller intradía (duda #4: config-driven, ~60-90s). Más
   # rápido no aporta (el dato de Yahoo ya llega ~15 min retrasado) y solo
   # gasta presupuesto de rate-limit y almacenamiento.

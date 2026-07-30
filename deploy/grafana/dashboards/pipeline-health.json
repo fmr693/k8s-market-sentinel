@@ -2,11 +2,17 @@
   "title": "Pipeline Health",
   "uid": "pipeline-health",
   "description": "Operations dashboard: data freshness per source, ingest activity and NAV quality (SQL over Neon), process metrics (poller + ingest jobs) from Prometheus (phase 9), and the declarative data quality checks + NAV cross-check (phase 10).",
-  "tags": ["sentinel", "ops"],
+  "tags": [
+    "sentinel",
+    "ops"
+  ],
   "schemaVersion": 39,
   "editable": true,
   "timezone": "browser",
-  "time": { "from": "now-14d", "to": "now" },
+  "time": {
+    "from": "now-14d",
+    "to": "now"
+  },
   "refresh": "5m",
   "panels": [
     {
@@ -14,8 +20,16 @@
       "type": "stat",
       "title": "Daily prices - hours since last ingest",
       "description": "Slow-lane CronJob (nightly, Mon-Fri). Yellow past ~1 missed run; red past 2. Weekends age legitimately.",
-      "gridPos": { "h": 5, "w": 5, "x": 0, "y": 0 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 0,
+        "y": 0
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
@@ -23,7 +37,15 @@
           "rawSql": "SELECT extract(epoch FROM now() - max(ingested_at)) / 3600 AS hours FROM silver.prices_daily"
         }
       ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "value" },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none",
+        "colorMode": "value"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "h",
@@ -31,9 +53,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 30 },
-              { "color": "red", "value": 78 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 78
+              }
             ]
           }
         },
@@ -45,8 +76,16 @@
       "type": "stat",
       "title": "Intraday prices - hours since last tick",
       "description": "The poller's pulse. Ages legitimately overnight (~18h) and over weekends (~65h): red only beyond a full weekend.",
-      "gridPos": { "h": 5, "w": 5, "x": 5, "y": 0 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 5,
+        "y": 0
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
@@ -54,7 +93,15 @@
           "rawSql": "SELECT extract(epoch FROM now() - max(ingested_at)) / 3600 AS hours FROM silver.prices_intraday"
         }
       ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "value" },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none",
+        "colorMode": "value"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "h",
@@ -62,9 +109,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 20 },
-              { "color": "red", "value": 72 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 20
+              },
+              {
+                "color": "red",
+                "value": 72
+              }
             ]
           }
         },
@@ -76,8 +132,16 @@
       "type": "stat",
       "title": "NAV - hours since last ingest",
       "description": "CEFConnect scraper (nightly, Mon-Fri). The fragile piece: watch this one.",
-      "gridPos": { "h": 5, "w": 5, "x": 10, "y": 0 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 10,
+        "y": 0
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
@@ -85,7 +149,15 @@
           "rawSql": "SELECT extract(epoch FROM now() - max(ingested_at)) / 3600 AS hours FROM silver.navs"
         }
       ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "value" },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none",
+        "colorMode": "value"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "h",
@@ -93,9 +165,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 30 },
-              { "color": "red", "value": 78 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 78
+              }
             ]
           }
         },
@@ -106,8 +187,16 @@
       "id": 4,
       "type": "stat",
       "title": "FRED macro - hours since last ingest",
-      "gridPos": { "h": 5, "w": 5, "x": 15, "y": 0 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 15,
+        "y": 0
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
@@ -115,7 +204,15 @@
           "rawSql": "SELECT extract(epoch FROM now() - max(ingested_at)) / 3600 AS hours FROM silver.macro_series WHERE series_id <> 'EURUSD_ECB'"
         }
       ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "value" },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none",
+        "colorMode": "value"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "h",
@@ -123,9 +220,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 30 },
-              { "color": "red", "value": 78 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 78
+              }
             ]
           }
         },
@@ -136,8 +242,16 @@
       "id": 5,
       "type": "stat",
       "title": "ECB FX - hours since last ingest",
-      "gridPos": { "h": 5, "w": 4, "x": 20, "y": 0 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 20,
+        "y": 0
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
@@ -145,7 +259,15 @@
           "rawSql": "SELECT extract(epoch FROM now() - max(ingested_at)) / 3600 AS hours FROM silver.macro_series WHERE series_id = 'EURUSD_ECB'"
         }
       ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "value" },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none",
+        "colorMode": "value"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "h",
@@ -153,9 +275,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 30 },
-              { "color": "red", "value": 78 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 78
+              }
             ]
           }
         },
@@ -167,8 +298,16 @@
       "type": "timeseries",
       "title": "Rows ingested per day, by table (log scale)",
       "description": "Did the slow lane work last night? Log scale because volumes differ by orders of magnitude (intraday ~9k/day vs NAV ~19/day).",
-      "gridPos": { "h": 9, "w": 16, "x": 0, "y": 5 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "gridPos": {
+        "h": 9,
+        "w": 16,
+        "x": 0,
+        "y": 5
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
@@ -177,8 +316,14 @@
         }
       ],
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "fieldConfig": {
         "defaults": {
@@ -186,7 +331,10 @@
             "drawStyle": "bars",
             "fillOpacity": 60,
             "lineWidth": 1,
-            "scaleDistribution": { "type": "log", "log": 10 }
+            "scaleDistribution": {
+              "type": "log",
+              "log": 10
+            }
           }
         },
         "overrides": []
@@ -197,8 +345,16 @@
       "type": "stat",
       "title": "CEFs with stale NAV (rancio)",
       "description": "NAV older than 4 natural days. Anything above zero on a weekday = the CEFConnect scraper is failing.",
-      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 5 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 5
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
@@ -206,15 +362,32 @@
           "rawSql": "SELECT count(*) AS stale FROM gold.cef_snapshot WHERE nav_quality = 'rancio'"
         }
       ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "background" },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none",
+        "colorMode": "background"
+      },
       "fieldConfig": {
         "defaults": {
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 1 },
-              { "color": "red", "value": 3 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
             ]
           }
         },
@@ -225,25 +398,46 @@
       "id": 8,
       "type": "table",
       "title": "Stale NAVs - detail",
-      "gridPos": { "h": 5, "w": 8, "x": 16, "y": 9 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "gridPos": {
+        "h": 5,
+        "w": 8,
+        "x": 16,
+        "y": 9
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT ticker AS \"CEF\", nav_date AS \"NAV date\", nav_age_days AS \"Age (days)\" FROM gold.cef_snapshot WHERE nav_quality = 'rancio' ORDER BY nav_age_days DESC"
+          "rawSql": "SELECT ticker AS \"CEF\", nav_date::text AS \"NAV date\", nav_age_days AS \"Age (days)\" FROM gold.cef_snapshot WHERE nav_quality = 'rancio' ORDER BY nav_age_days DESC"
         }
       ],
-      "options": { "sortBy": [] },
-      "fieldConfig": { "defaults": {}, "overrides": [] }
+      "options": {
+        "sortBy": []
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
     },
     {
       "id": 9,
       "type": "table",
       "title": "Bronze fetch log - by source",
       "description": "Raw audit trail (bronze.raw_fetches). A source with zero fetches in 24h on a weekday points at a broken job.",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
@@ -251,33 +445,75 @@
           "rawSql": "SELECT source, max(fetched_at) AS \"last fetch\", count(*) FILTER (WHERE fetched_at > now() - interval '24 hours') AS \"fetches 24h\", count(*) AS \"fetches total\" FROM bronze.raw_fetches GROUP BY source ORDER BY source"
         }
       ],
-      "options": { "sortBy": [] },
-      "fieldConfig": { "defaults": {}, "overrides": [] }
+      "options": {
+        "sortBy": []
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
     },
     {
       "id": 11,
       "type": "timeseries",
       "title": "Poller - tick & failure rate (Prometheus)",
       "description": "The poller's pulse from PROCESS metrics (not Neon). Rates fall to ~0 while the market is closed (the poller sleeps). Needs image 0.6.0+ (prometheus_client); empty otherwise.",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
-        { "refId": "A", "expr": "rate(sentinel_poller_ticks_total[5m])", "legendFormat": "ticks/s" },
-        { "refId": "B", "expr": "rate(sentinel_poller_tick_failures_total[5m])", "legendFormat": "failures/s" }
+        {
+          "refId": "A",
+          "expr": "rate(sentinel_poller_ticks_total[5m])",
+          "legendFormat": "ticks/s"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(sentinel_poller_tick_failures_total[5m])",
+          "legendFormat": "failures/s"
+        }
       ],
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "fieldConfig": {
         "defaults": {
-          "custom": { "drawStyle": "line", "fillOpacity": 15, "lineWidth": 1 },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineWidth": 1
+          },
           "unit": "short"
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "failures/s" },
-            "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } } ]
+            "matcher": {
+              "id": "byName",
+              "options": "failures/s"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
           }
         ]
       }
@@ -287,18 +523,49 @@
       "type": "stat",
       "title": "Poller - consecutive failures",
       "description": "Current run of consecutive tick failures. The poller crashes on purpose (and K8s restarts it, maybe on a healthier node) at 30.",
-      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 22 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [ { "refId": "A", "expr": "sentinel_poller_consecutive_failures", "instant": true } ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "background" },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 22
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sentinel_poller_consecutive_failures",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none",
+        "colorMode": "background"
+      },
       "fieldConfig": {
         "defaults": {
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 5 },
-              { "color": "red", "value": 20 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
             ]
           }
         },
@@ -310,22 +577,60 @@
       "type": "stat",
       "title": "Poller - market",
       "description": "1 = XNYS open, 0 = closed. Explains why the tick rate and freshness age overnight and on weekends.",
-      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 22 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [ { "refId": "A", "expr": "sentinel_market_open", "instant": true } ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "background" },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 22
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sentinel_market_open",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none",
+        "colorMode": "background"
+      },
       "fieldConfig": {
         "defaults": {
           "mappings": [
             {
               "type": "value",
               "options": {
-                "1": { "text": "Open", "color": "green", "index": 0 },
-                "0": { "text": "Closed", "color": "blue", "index": 1 }
+                "1": {
+                  "text": "Open",
+                  "color": "green",
+                  "index": 0
+                },
+                "0": {
+                  "text": "Closed",
+                  "color": "blue",
+                  "index": 1
+                }
               }
             }
           ],
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "text", "value": null } ] }
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          }
         },
         "overrides": []
       }
@@ -335,19 +640,50 @@
       "type": "stat",
       "title": "Poller - since last tick",
       "description": "Seconds since the last successful tick. Ages legitimately overnight and over weekends (the poller sleeps when the market is closed) - red only past a full weekend.",
-      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 22 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [ { "refId": "A", "expr": "time() - sentinel_poller_last_tick_timestamp_seconds", "instant": true } ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "value" },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 22
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - sentinel_poller_last_tick_timestamp_seconds",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none",
+        "colorMode": "value"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "s",
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 14400 },
-              { "color": "red", "value": 259200 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 14400
+              },
+              {
+                "color": "red",
+                "value": 259200
+              }
             ]
           }
         },
@@ -359,10 +695,33 @@
       "type": "bargauge",
       "title": "Ingest jobs - hours since last run",
       "description": "Per CronJob, pushed to the Pushgateway (sentinel_ingest_last_run_timestamp_seconds). One bar per ingestor; empty until each has run at least once. Yellow past ~1 missed nightly run, red past 2.",
-      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 22 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [ { "refId": "A", "expr": "(time() - sentinel_ingest_last_run_timestamp_seconds) / 3600", "legendFormat": "{{job}}", "instant": true } ],
-      "options": { "orientation": "horizontal", "displayMode": "gradient", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 22
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(time() - sentinel_ingest_last_run_timestamp_seconds) / 3600",
+          "legendFormat": "{{job}}",
+          "instant": true
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "h",
@@ -370,9 +729,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 30 },
-              { "color": "red", "value": 78 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 78
+              }
             ]
           }
         },
@@ -384,8 +752,16 @@
       "type": "table",
       "title": "Data quality - latest check result",
       "description": "One row per check DECLARED in config/quality_checks.yaml (phase 10). The value is shown raw on purpose: its unit lives in the config, not in the database, so formatting it per check here would mean editing this panel every time a check is added to the YAML - the opposite of config-driven. Read the unit from the check name (freshness = hours, count = CEFs, crosscheck = fraction). 'error' is not 'fail': the check could not even be measured (see Detail).",
-      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 27 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "gridPos": {
+        "h": 8,
+        "w": 14,
+        "x": 0,
+        "y": 27
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
@@ -393,12 +769,24 @@
           "rawSql": "SELECT check_name AS \"Check\", round(value, 4) AS \"Value\", status AS \"Status\", run_ts AS \"Last run\", detail AS \"Detail\" FROM gold.data_quality_latest ORDER BY CASE status WHEN 'fail' THEN 0 WHEN 'error' THEN 1 WHEN 'warn' THEN 2 ELSE 3 END, check_name"
         }
       ],
-      "options": { "sortBy": [] },
+      "options": {
+        "sortBy": []
+      },
       "fieldConfig": {
-        "defaults": { "custom": { "align": "auto", "cellOptions": { "type": "auto" } } },
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Status" },
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
             "properties": [
               {
                 "id": "mappings",
@@ -406,15 +794,36 @@
                   {
                     "type": "value",
                     "options": {
-                      "ok": { "text": "OK", "color": "green", "index": 0 },
-                      "warn": { "text": "Warn", "color": "orange", "index": 1 },
-                      "fail": { "text": "FAIL", "color": "red", "index": 2 },
-                      "error": { "text": "Error", "color": "purple", "index": 3 }
+                      "ok": {
+                        "text": "OK",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "warn": {
+                        "text": "Warn",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "fail": {
+                        "text": "FAIL",
+                        "color": "red",
+                        "index": 2
+                      },
+                      "error": {
+                        "text": "Error",
+                        "color": "purple",
+                        "index": 3
+                      }
                     }
                   }
                 ]
               },
-              { "id": "custom.cellOptions", "value": { "type": "color-text" } }
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
             ]
           }
         ]
@@ -425,8 +834,16 @@
       "type": "stat",
       "title": "Data quality - checks not passing",
       "description": "Checks currently in 'fail' or 'error'. The CronJob runs nightly at 23:45 and exits non-zero on either, so K8s marks the Job failed too.",
-      "gridPos": { "h": 4, "w": 10, "x": 14, "y": 27 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "gridPos": {
+        "h": 4,
+        "w": 10,
+        "x": 14,
+        "y": 27
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
@@ -434,14 +851,28 @@
           "rawSql": "SELECT count(*) AS failing FROM gold.data_quality_latest WHERE status IN ('fail', 'error')"
         }
       ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "background" },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none",
+        "colorMode": "background"
+      },
       "fieldConfig": {
         "defaults": {
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 1 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
             ]
           }
         },
@@ -453,8 +884,16 @@
       "type": "timeseries",
       "title": "Data quality - checks not passing over time",
       "description": "History from gold.data_quality_results: this is what answers 'since WHEN is it broken?' - and the reason the results are a TABLE and not a view (decision #44). One bar group per run (nightly).",
-      "gridPos": { "h": 4, "w": 10, "x": 14, "y": 31 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "gridPos": {
+        "h": 4,
+        "w": 10,
+        "x": 14,
+        "y": 31
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
@@ -463,23 +902,55 @@
         }
       ],
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "desc" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
       "fieldConfig": {
         "defaults": {
-          "custom": { "drawStyle": "bars", "fillOpacity": 60, "lineWidth": 1 },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "lineWidth": 1
+          },
           "unit": "short",
           "decimals": 0
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "fail/error" },
-            "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } } ]
+            "matcher": {
+              "id": "byName",
+              "options": "fail/error"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "warn" },
-            "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } } ]
+            "matcher": {
+              "id": "byName",
+              "options": "warn"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
           }
         ]
       }
@@ -489,33 +960,74 @@
       "type": "table",
       "title": "NAV cross-check - CEFConnect vs Yahoo proxy (latest per CEF)",
       "description": "Second opinion on the fragile piece (phase 10, decision #45): the NAV scraped from CEFConnect against the one Yahoo publishes for the same fund (ticker X...X). Above 2% the recent CEFConnect point may be preliminary, and gold.cef_snapshot degrades nav_quality to 'sospechoso' by itself. CEFs with no proxy in Yahoo (BCAT, ADX) simply do not appear - a documented gap, not an error.",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 35 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 35
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT ticker AS \"CEF\", nav_date AS \"NAV date\", nav_cefconnect AS \"NAV (CEFConnect)\", nav_proxy AS \"NAV (Yahoo proxy)\", proxy_ticker AS \"Proxy\", round(divergence * 100, 2) AS \"Divergence %\" FROM (SELECT DISTINCT ON (ticker) * FROM gold.nav_crosscheck ORDER BY ticker, nav_date DESC) t ORDER BY divergence DESC"
+          "rawSql": "SELECT ticker AS \"CEF\", nav_date::text AS \"NAV date\", nav_cefconnect AS \"NAV (CEFConnect)\", nav_proxy AS \"NAV (Yahoo proxy)\", proxy_ticker AS \"Proxy\", round(divergence * 100, 2) AS \"Divergence %\" FROM (SELECT DISTINCT ON (ticker) * FROM gold.nav_crosscheck ORDER BY ticker, nav_date DESC) t ORDER BY divergence DESC"
         }
       ],
-      "options": { "sortBy": [] },
+      "options": {
+        "sortBy": []
+      },
       "fieldConfig": {
-        "defaults": { "custom": { "align": "auto", "cellOptions": { "type": "auto" } } },
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Divergence %" },
+            "matcher": {
+              "id": "byName",
+              "options": "Divergence %"
+            },
             "properties": [
-              { "id": "unit", "value": "percent" },
-              { "id": "decimals", "value": 2 },
-              { "id": "custom.cellOptions", "value": { "type": "color-background", "mode": "gradient" } },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
               {
                 "id": "thresholds",
                 "value": {
                   "mode": "absolute",
                   "steps": [
-                    { "color": "green", "value": null },
-                    { "color": "orange", "value": 2 },
-                    { "color": "red", "value": 5 }
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 2
+                    },
+                    {
+                      "color": "red",
+                      "value": 5
+                    }
                   ]
                 }
               }
@@ -529,8 +1041,16 @@
       "type": "timeseries",
       "title": "NAV cross-check - worst divergence per day",
       "description": "Max relative divergence across the universe, per NAV date. The dashed lines are the same 2% / 5% thresholds used by the nav_crosscheck check in config/quality_checks.yaml and by the 'sospechoso' degradation in gold.cef_snapshot. A spike on the most recent date only = a preliminary NAV point (the FSCO evidence); a sustained level = the scraper is reading something else.",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 35 },
-      "datasource": { "type": "grafana-postgresql-datasource", "uid": "neon-sentinel" },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 35
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
       "targets": [
         {
           "refId": "A",
@@ -539,8 +1059,14 @@
         }
       ],
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "single", "sort": "none" }
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
       },
       "fieldConfig": {
         "defaults": {
@@ -548,16 +1074,27 @@
             "drawStyle": "line",
             "fillOpacity": 15,
             "lineWidth": 1,
-            "thresholdsStyle": { "mode": "dashed" }
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
           },
           "unit": "percent",
           "decimals": 2,
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "orange", "value": 2 },
-              { "color": "red", "value": 5 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 2
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
             ]
           }
         },

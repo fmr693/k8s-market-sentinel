@@ -83,7 +83,7 @@ def _ingest_one(conn: psycopg.Connection, series_id: str, universe: Universe, ap
         last_date = cur.fetchone()[0]
 
     start = compute_fetch_start(
-        last_date, universe.price_history_start, universe.macro_overlap_days
+        last_date, universe.macro_start, universe.macro_overlap_days
     )
     log.info("%s: último dato=%s → pidiendo desde %s", series_id, last_date, start)
 

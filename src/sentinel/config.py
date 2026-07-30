@@ -64,6 +64,19 @@ class Universe:
     # cross-check y el pipeline sigue igual. field(default_factory) porque un
     # dict mutable no puede ser default directo en un dataclass frozen.
     nav_check: dict[str, str] = field(default_factory=dict)
+    # Inicio del backfill de las series MACRO, separado del de precios porque
+    # el criterio es distinto: en precios 2015 sobra (el z-score mira 252
+    # sesiones), pero una serie macro sirve justo para dar CONTEXTO histórico y
+    # ahí cada década cuenta — con 11 años no se ve 2008. Opcional: sin la
+    # clave cae en price_history_start y el comportamiento no cambia (mismo
+    # patrón de degradación que intraday_exclude y stocks).
+    macro_history_start: dt.date | None = None
+
+    @property
+    def macro_start(self) -> dt.date:
+        """Desde dónde backfillear las macro: su clave propia si existe, y si
+        no la de precios (compat hacia atrás con ConfigMaps viejos)."""
+        return self.macro_history_start or self.price_history_start
 
     @property
     def price_tickers(self) -> list[str]:
@@ -108,6 +121,11 @@ def load_universe(path: Path | None = None) -> Universe:
         macro_overlap_days=int(defaults["macro_overlap_days"]),
         poll_interval_seconds=int(defaults["poll_interval_seconds"]),
         nav_check=raw.get("nav_check", {}),  # opcional: sin la clave, sin cross-check
+        macro_history_start=(
+            dt.date.fromisoformat(defaults["macro_history_start"])
+            if defaults.get("macro_history_start")
+            else None  # opcional: cae en price_history_start (ver macro_start)
+        ),
     )
 
 

@@ -19,7 +19,7 @@
       "id": 1,
       "type": "stat",
       "title": "HY credit spread (ICE BofA OAS)",
-      "description": "Extra yield that high-yield ('junk') corporate bonds pay over US Treasuries. THE credit-stress thermometer: widening = fear and falling bond prices (the buying window for credit CEFs may be opening); tight = calm/complacency. Note: FRED's API only serves the last ~3 years (ICE licence limit).",
+      "description": "Extra yield that high-yield ('junk') corporate bonds pay over US Treasuries — THE credit-stress thermometer. Widening = fear and falling bond prices (the buying window for credit CEFs may be opening); tight = calm, or complacency.\n\nREAD IT WITH CARE: FRED only publishes a rolling ~3-year window of this series (ICE licence), so 'high' and 'low' here are relative to a very short memory. Today's ~2.8% sits around the 26th percentile of those 3 years — which sounds ordinary — but measured against decades it is historically TIGHT. The chart below (Baa spread, back to 2007) supplies the missing scale.",
       "gridPos": {
         "h": 5,
         "w": 6,
@@ -235,7 +235,108 @@
         },
         "overrides": []
       },
-      "description": "The market's 'fear gauge': expected volatility of the S&P 500 over the next 30 days, implied by option prices. Rough guide: under ~15 = calm, 20-30 = nervous, above 30 = fear/panic - historically when bargains appear."
+      "description": "The market's 'fear gauge': the volatility the options market EXPECTS in the S&P 500 over the next 30 days. It is a forecast of turbulence, not a direction — it rises in crashes because violent moves are expected, not because prices must fall.\n\nRough guide: under 15 = calm · 15-20 = normal · 20-30 = nervous · above 30 = fear · above 50 = panic (seen in 2008 and March 2020).\n\nWHY IT MATTERS HERE: fear is what widens CEF discounts. When the VIX spikes, retail holders sell closed-end funds faster than the underlying bonds move, so price falls further than NAV and the discount opens — which is exactly the anomaly this dashboard hunts. A calm VIX with wide discounts is a different (and rarer) signal than a panicked VIX with wide discounts.\n\nIt mean-reverts hard: spikes are violent and short-lived, so a high reading is a moment to look, not a level that lasts."
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Credit stress in context — Baa vs 10Y Treasury (long history)",
+      "description": "The context the panel above cannot give. Moody's Baa corporate bond yield minus the 10-year Treasury: the same idea as the HY spread (what investors demand for taking credit risk) but on investment-grade bonds — and, crucially, NOT licence-restricted, so it reaches back to 2007 instead of 3 years.\n\nThe two are not interchangeable: Baa is higher quality, so its LEVELS are lower than high yield. What transfers is the SHAPE — where we sit relative to calm and to crisis.\n\nThe flat line is today's level, drawn across the whole window so you can see at a glance whether now is historically calm or stressed. For reference, this spread peaked at 6.16% in the 2008 crisis; today it is around 1.6%.\n\nUse the time picker (top right) to widen or narrow the window — zoom out to include 2008 and 2020 for the full picture.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Today"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Baa - 10Y spread"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "neon-sentinel"
+          },
+          "rawSql": "SELECT obs_date::timestamptz AS \"time\",\n       value AS \"Baa - 10Y spread\",\n       (SELECT value FROM silver.macro_series\n         WHERE series_id = 'BAA10Y'\n         ORDER BY obs_date DESC LIMIT 1) AS \"Today\"\n  FROM silver.macro_series\n WHERE series_id = 'BAA10Y'\n   AND $__timeFilter(obs_date::timestamptz)\n ORDER BY 1"
+        }
+      ]
     },
     {
       "id": 5,
@@ -245,7 +346,7 @@
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 5
+        "y": 14
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -255,7 +356,7 @@
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT s.ticker AS \"CEF\", s.price AS \"Price\", s.nav AS \"NAV\", s.nav_date AS \"NAV date\", s.nav_quality AS \"NAV quality\", round(s.premium_discount * 100, 2) AS \"Prem/Disc %\", s.estado AS \"Status\", round(y.yield_ttm_on_price_pct, 2) AS \"Yield %\", y.n_dist_ttm AS \"Payments/yr\", round(s.zscore::numeric, 2) AS \"Z-score\", s.n_obs AS \"Obs (1y)\", s.zscore_date AS \"Z-score date\", s.zscore_band AS \"Signal\" FROM gold.cef_snapshot s LEFT JOIN gold.yield_ttm y ON y.ticker = s.ticker ORDER BY s.zscore ASC NULLS LAST"
+          "rawSql": "SELECT s.ticker AS \"CEF\", s.price AS \"Price\", s.nav AS \"NAV\", s.nav_date::text AS \"NAV date\", s.nav_quality AS \"NAV quality\", round(s.premium_discount * 100, 2) AS \"Prem/Disc %\", s.estado AS \"Status\", round(y.yield_ttm_on_price_pct, 2) AS \"Yield %\", y.n_dist_ttm AS \"Payments/yr\", round(s.zscore::numeric, 2) AS \"Z-score\", s.n_obs AS \"Obs (1y)\", s.zscore_date::text AS \"Z-score date\", s.zscore_band AS \"Signal\" FROM gold.cef_snapshot s LEFT JOIN gold.yield_ttm y ON y.ticker = s.ticker ORDER BY s.zscore ASC NULLS LAST"
         }
       ],
       "options": {
@@ -603,149 +704,6 @@
       }
     },
     {
-      "id": 20,
-      "type": "table",
-      "title": "Signal backtest - what happened after z-score crossed below -2",
-      "description": "For each historical crossing of z-score <= -2 (with >=126 obs), the discount reversion and price move at +1/+3/+6 months. Read with the caveat panel: the sample is dominated by the 2026-03 credit sell-off.",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 44
-      },
-      "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "neon-sentinel"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "format": "table",
-          "rawSql": "SELECT horizon_months AS \"Horizon (months)\", n_signals_realized AS \"Signals (matured)\", n_signals_total AS \"Signals (total)\", round(reversion_hit_rate * 100, 1) AS \"Discount reverted %\", round(price_up_hit_rate * 100, 1) AS \"Price up %\", round(avg_price_return * 100, 2) AS \"Avg price return %\" FROM gold.signal_backtest_summary ORDER BY horizon_months"
-        }
-      ],
-      "options": {
-        "sortBy": []
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            }
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Discount reverted %"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background",
-                  "mode": "gradient"
-                }
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "continuous-RdYlGr"
-                }
-              },
-              {
-                "id": "min",
-                "value": 0
-              },
-              {
-                "id": "max",
-                "value": 100
-              },
-              {
-                "id": "unit",
-                "value": "percent"
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Price up %"
-            },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-background",
-                  "mode": "gradient"
-                }
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "continuous-RdYlGr"
-                }
-              },
-              {
-                "id": "min",
-                "value": 0
-              },
-              {
-                "id": "max",
-                "value": 100
-              },
-              {
-                "id": "unit",
-                "value": "percent"
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Avg price return %"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "percent"
-              },
-              {
-                "id": "decimals",
-                "value": 2
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "id": 21,
-      "type": "text",
-      "title": "How to read the backtest (honest caveats)",
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 44
-      },
-      "options": {
-        "mode": "markdown",
-        "content": "**Thesis under test:** when a CEF's discount becomes anomalously wide (z-score crosses below **-2**), does the discount *revert* (narrow) and the *price* rise over the next 1 / 3 / 6 months?\n\n- **Discount reverted %** / **Price up %** = share of *matured* signals where it happened.\n- **Sampling caveat:** so far ~half the signals come from the **2026-03 credit sell-off**, where nearly the whole universe crossed -2 at once and rebounded together. Those are **correlated**, not independent - a high hit rate today reflects *one episode*, not a proven edge.\n- **+6m has not matured yet** (needs 6 months of forward data). The sample grows with every accumulated trading day.\n- *Mechanical note:* a z-score is a deviation from a 1-year moving average, so some reversion is built in. **Price return** is the more independent signal."
-      }
-    },
-    {
       "id": 12,
       "type": "text",
       "title": "Column guide - CEF universe table",
@@ -753,7 +711,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 26
       },
       "options": {
         "mode": "markdown",
@@ -770,7 +728,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 25
+        "y": 34
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -780,7 +738,7 @@
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT ticker AS \"CEF\", round(yield_ttm_on_price_pct, 2) AS \"Yield on price %\", round(yield_ttm_on_nav_pct, 2) AS \"Yield on NAV %\", round(yield_current_pct, 2) AS \"Yield current %\", round((yield_current_pct / yield_ttm_on_price_pct - 1) * 100, 1) AS \"Dist trend %\", dist_ttm AS \"Paid 12m $\", n_dist_ttm AS \"Payments (1y)\", last_amount AS \"Last dist $\", last_ex_date AS \"Last ex-date\" FROM gold.yield_ttm ORDER BY yield_ttm_on_price_pct DESC"
+          "rawSql": "SELECT ticker AS \"CEF\", round(yield_ttm_on_price_pct, 2) AS \"Yield on price %\", round(yield_ttm_on_nav_pct, 2) AS \"Yield on NAV %\", round(yield_current_pct, 2) AS \"Yield current %\", round((yield_current_pct / yield_ttm_on_price_pct - 1) * 100, 1) AS \"Dist trend %\", dist_ttm AS \"Paid 12m $\", n_dist_ttm AS \"Payments (1y)\", last_amount AS \"Last dist $\", last_ex_date::text AS \"Last ex-date\" FROM gold.yield_ttm ORDER BY yield_ttm_on_price_pct DESC"
         }
       ],
       "options": {
@@ -921,7 +879,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 35
+        "y": 44
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -931,7 +889,7 @@
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "WITH r AS (SELECT ticker, trading_date, close, lag(close) OVER (PARTITION BY ticker ORDER BY trading_date) AS prev, row_number() OVER (PARTITION BY ticker ORDER BY trading_date DESC) AS rn FROM silver.prices_daily WHERE ticker NOT IN (SELECT DISTINCT ticker FROM silver.navs) AND ticker NOT LIKE '^%' AND ticker NOT LIKE '%=X') SELECT ticker AS \"Asset\", trading_date AS \"Date\", close AS \"Last price\", round((close / prev - 1) * 100, 2) AS \"Day %\" FROM r WHERE rn = 1 ORDER BY ticker"
+          "rawSql": "WITH r AS (SELECT ticker, trading_date, close, lag(close) OVER (PARTITION BY ticker ORDER BY trading_date) AS prev, row_number() OVER (PARTITION BY ticker ORDER BY trading_date DESC) AS rn FROM silver.prices_daily WHERE ticker NOT IN (SELECT DISTINCT ticker FROM silver.navs) AND ticker NOT LIKE '^%' AND ticker NOT LIKE '%=X') SELECT ticker AS \"Asset\", trading_date::text AS \"Date\", close AS \"Last price\", round((close / prev - 1) * 100, 2) AS \"Day %\" FROM r WHERE rn = 1 ORDER BY ticker"
         }
       ],
       "options": {
@@ -1109,7 +1067,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 35
+        "y": 44
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -1119,7 +1077,7 @@
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "WITH r AS (SELECT ticker, trading_date, close, lag(close) OVER (PARTITION BY ticker ORDER BY trading_date) AS prev, row_number() OVER (PARTITION BY ticker ORDER BY trading_date DESC) AS rn FROM silver.prices_daily WHERE ticker LIKE '^%' OR ticker LIKE '%=X') SELECT ticker AS \"Index / pair\", trading_date AS \"Date\", close AS \"Last level\", round((close / prev - 1) * 100, 2) AS \"Day %\" FROM r WHERE rn = 1 ORDER BY ticker"
+          "rawSql": "WITH r AS (SELECT ticker, trading_date, close, lag(close) OVER (PARTITION BY ticker ORDER BY trading_date) AS prev, row_number() OVER (PARTITION BY ticker ORDER BY trading_date DESC) AS rn FROM silver.prices_daily WHERE ticker LIKE '^%' OR ticker LIKE '%=X') SELECT ticker AS \"Index / pair\", trading_date::text AS \"Date\", close AS \"Last level\", round((close / prev - 1) * 100, 2) AS \"Day %\" FROM r WHERE rn = 1 ORDER BY ticker"
         }
       ],
       "options": {
@@ -1214,6 +1172,149 @@
             ]
           }
         ]
+      }
+    },
+    {
+      "id": 20,
+      "type": "table",
+      "title": "Signal backtest - what happened after z-score crossed below -2",
+      "description": "For each historical crossing of z-score <= -2 (with >=126 obs), the discount reversion and price move at +1/+3/+6 months. Read with the caveat panel: the sample is dominated by the 2026-03 credit sell-off.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 53
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT horizon_months AS \"Horizon (months)\", n_signals_realized AS \"Signals (matured)\", n_signals_total AS \"Signals (total)\", round(reversion_hit_rate * 100, 1) AS \"Discount reverted %\", round(price_up_hit_rate * 100, 1) AS \"Price up %\", round(avg_price_return * 100, 2) AS \"Avg price return %\" FROM gold.signal_backtest_summary ORDER BY horizon_months"
+        }
+      ],
+      "options": {
+        "sortBy": []
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Discount reverted %"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-RdYlGr"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Price up %"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-RdYlGr"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Avg price return %"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 21,
+      "type": "text",
+      "title": "How to read the backtest (honest caveats)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 53
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Thesis under test:** when a CEF's discount becomes anomalously wide (z-score crosses below **-2**), does the discount *revert* (narrow) and the *price* rise over the next 1 / 3 / 6 months?\n\n- **Discount reverted %** / **Price up %** = share of *matured* signals where it happened.\n- **Sampling caveat:** so far ~half the signals come from the **2026-03 credit sell-off**, where nearly the whole universe crossed -2 at once and rebounded together. Those are **correlated**, not independent - a high hit rate today reflects *one episode*, not a proven edge.\n- **+6m has not matured yet** (needs 6 months of forward data). The sample grows with every accumulated trading day.\n- *Mechanical note:* a z-score is a deviation from a 1-year moving average, so some reversion is built in. **Price return** is the more independent signal."
       }
     }
   ],
