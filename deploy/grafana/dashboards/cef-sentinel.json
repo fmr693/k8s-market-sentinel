@@ -21,7 +21,7 @@
       "title": "HY credit spread (ICE BofA OAS)",
       "description": "Extra yield that high-yield ('junk') corporate bonds pay over US Treasuries — THE credit-stress thermometer. Widening = fear and falling bond prices (the buying window for credit CEFs may be opening); tight = calm, or complacency.\n\nREAD IT WITH CARE: FRED only publishes a rolling ~3-year window of this series (ICE licence), so 'high' and 'low' here are relative to a very short memory. Today's ~2.8% sits around the 26th percentile of those 3 years — which sounds ordinary — but measured against decades it is historically TIGHT. The chart below (Baa spread, back to 2007) supplies the missing scale.",
       "gridPos": {
-        "h": 5,
+        "h": 8,
         "w": 6,
         "x": 0,
         "y": 0
@@ -77,7 +77,7 @@
       "title": "EUR/USD (ECB fixing)",
       "description": "Official daily ECB fixing (~16:00 CET). Personal band: 1.10 - 1.20; outside the band = act (display reference only).",
       "gridPos": {
-        "h": 5,
+        "h": 8,
         "w": 6,
         "x": 6,
         "y": 0
@@ -132,7 +132,7 @@
       "title": "Buffett indicator (W5000 / GDP)",
       "description": "Total US market cap proxy vs nominal GDP. What matters is the level vs its own history, not the absolute number.",
       "gridPos": {
-        "h": 5,
+        "h": 8,
         "w": 6,
         "x": 12,
         "y": 0
@@ -187,7 +187,7 @@
       "type": "stat",
       "title": "VIX",
       "gridPos": {
-        "h": 5,
+        "h": 8,
         "w": 6,
         "x": 18,
         "y": 0
@@ -240,7 +240,7 @@
     {
       "id": 22,
       "type": "timeseries",
-      "title": "Credit stress in context — Baa vs 10Y Treasury (long history)",
+      "title": "Is today's spread normal? - long-run context (Baa proxy for the panel above)",
       "description": "The context the panel above cannot give. Moody's Baa corporate bond yield minus the 10-year Treasury: the same idea as the HY spread (what investors demand for taking credit risk) but on investment-grade bonds — and, crucially, NOT licence-restricted, so it reaches back to 2007 instead of 3 years.\n\nThe two are not interchangeable: Baa is higher quality, so its LEVELS are lower than high yield. What transfers is the SHAPE — where we sit relative to calm and to crisis.\n\nThe flat line is today's level, drawn across the whole window so you can see at a glance whether now is historically calm or stressed. For reference, this spread peaked at 6.16% in the 2008 crisis; today it is around 1.6%.\n\nUse the time picker (top right) to widen or narrow the window — zoom out to include 2008 and 2020 for the full picture.",
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -250,7 +250,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 5
+        "y": 8
       },
       "fieldConfig": {
         "defaults": {
@@ -346,7 +346,7 @@
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 14
+        "y": 17
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -711,7 +711,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 26
+        "y": 29
       },
       "options": {
         "mode": "markdown",
@@ -728,7 +728,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 37
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -879,7 +879,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 44
+        "y": 47
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -1067,7 +1067,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 44
+        "y": 47
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -1183,7 +1183,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 53
+        "y": 56
       },
       "datasource": {
         "type": "grafana-postgresql-datasource",
@@ -1310,7 +1310,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 53
+        "y": 56
       },
       "options": {
         "mode": "markdown",
