@@ -1,128 +1,255 @@
 # k8s-market-sentinel
 
-Plataforma **Kubernetes-nativa** de vigilancia de CEFs (closed-end funds) de crédito de EE. UU.: ingesta el precio (diario e intradía), el NAV, las distribuciones y las señales macro, calcula **descuentos sobre NAV, sus z-scores y el yield de distribución** en una capa gold de Postgres, lo visualiza en **dashboards de Grafana aprovisionados como código**, y (en fases próximas) avisará por Telegram cuando aparezcan descuentos anormalmente anchos o recortes de distribución.
+A **Kubernetes-native data platform** that watches US credit closed-end funds
+(CEFs): it ingests price, NAV, distributions and macro signals, computes
+discounts to NAV, their z-scores and distribution yield in a gold layer on
+Postgres, and renders it in Grafana dashboards provisioned as code.
+
+> **The thesis of this project is not the financial product — it's the portable
+> architecture.** The CEF workload is the demonstration payload. CEFConnect and
+> CEFData already publish discounts and z-scores; nobody needs another one. What
+> is worth building, and what this repo is actually about, is the pattern:
+> medallion layering, self-healing idempotent ingestion, config-driven
+> everything, crash-only processes, dashboards as code, GitOps. Swap the payload
+> and the platform stands.
 
 > ## ⚠️ Disclaimer
 >
-> Este proyecto es **pura y estrictamente formativo/educativo** y una herramienta personal de seguimiento. **Nada de lo que contiene —código, métricas, umbrales, alertas o documentación— es consejo de inversión** ni recomendación de compra o venta de ningún instrumento financiero. Los datos provienen de fuentes públicas gratuitas (con retardos, huecos y errores posibles) y las métricas pueden estar mal calculadas. Si inviertes basándote en esto, es bajo tu única y exclusiva responsabilidad.
+> This project is **strictly educational** and a personal tracking tool.
+> **Nothing in it — code, metrics, thresholds, alerts or documentation — is
+> investment advice** or a recommendation to buy or sell any financial
+> instrument. Data comes from free public sources (with delays, gaps and
+> possible errors) and the metrics may simply be wrong. If you invest based on
+> this, that is entirely your own responsibility.
 
-## Qué hace
+---
 
-- **Ingesta con backfill idempotente** (el sistema se autorrepara tras apagones: pregunta "¿cuál es mi último dato?" y pide desde ahí):
-  - Velas diarias de ~44 tickers vía yfinance (CEFs, benchmarks y watchlist de acciones USA/Europa).
-  - NAV diario por CEF desde CEFConnect (la pieza frágil, aislada en su propio job).
-  - Distribuciones de los CEFs (el yield ES la tesis en un CEF de crédito; su recorte, la alerta que importa).
-  - Series macro de FRED: diferencial high-yield, Treasury 10Y, PIB.
-  - Fixing oficial EUR/USD del BCE (frankfurter).
-- **Poller intradía**: Deployment crash-only con calendario real de la NYSE (festivos, medias sesiones, DST transatlántico vía `exchange_calendars`), velas 1m en batch, sueño interrumpible y salida limpia con SIGTERM.
-- **Medallón sobre Postgres** (Neon, gestionado): `bronze` (crudo jsonb, append-only) → `silver` (tipado, deduplicado por clave natural) → `gold` (vistas: descuento con signo, z-score 252 sesiones, descuento intradía ESTIMADO, yield TTM sobre precio y sobre NAV, indicador Buffett).
-- **Grafana aprovisionado como código**: dashboards JSON y datasource en el repo, pod sin estado (ConfigMaps generados por el chart desde esos ficheros), rol de Postgres **solo lectura** (`grafana_ro`, mínimo privilegio). El **modo visitante** (entrar sin login, en rol de solo lectura, aterrizando directo en el dashboard) también es configuración versionada, no un usuario creado a mano: sin PVC, un usuario de la UI se evaporaría en el siguiente reinicio.
-- **Contexto, no números desnudos**: un nivel suelto ("diferencial de crédito 2,84 %") no se puede juzgar. La capa gold calcula **percentil, z-score y años de historia disponibles** de cada serie macro, y donde la fuente está limitada por licencia a una ventana de 3 años se añade una serie **no restringida con 40 años** como regla de medir — sin sustituir a la relevante, que sigue siendo la del semáforo.
-- **Calidad de dato declarativa**: los checks (frescura por fuente, NAVs rancios, divergencia entre fuentes) se **declaran en `config/quality_checks.yaml`** — añadir uno es editar YAML, el código no cambia; un runner los ejecuta en transacción READ ONLY, guarda el veredicto con su historial en gold y sale con código 1 si alguno falla. El NAV, la pieza frágil, tiene **segunda opinión**: se contrasta con el que publica Yahoo para el mismo fondo y `nav_quality` se degrada sola a `sospechoso` si discrepan más de un 2%.
-- **Kubernetes, empaquetado como chart de Helm**: imagen única multi-comando (`sentinel migrate|ingest-prices|ingest-nav|ingest-nav-proxy|ingest-macro|ingest-fx|ingest-distributions|check-quality|poller`), 7 CronJobs del carril lento generados desde **una** plantilla y una lista en `values.yaml` (`timeZone: Europe/Madrid`), Deployment del poller con liveness por fichero-latido, y ConfigMaps generados desde los ficheros de configuración del repo. Cada componente tiene su interruptor: el despliegue mínimo son 10 recursos; el completo, 24.
+## How the data flows
 
-## Estado (fases)
+```mermaid
+flowchart LR
+    subgraph sources["External sources"]
+        YF["yfinance<br/><i>prices, 1m and 1d</i>"]
+        CC["CEFConnect<br/><i>NAV — the fragile one</i>"]
+        FRED["FRED<br/><i>macro series</i>"]
+        ECB["ECB / frankfurter<br/><i>EUR/USD fixing</i>"]
+    end
 
-| Fase | Contenido | Estado |
+    subgraph k8s["Kubernetes"]
+        direction TB
+        CRON["<b>7 CronJobs</b> — slow lane<br/><i>nightly, Europe/Madrid</i>"]
+        POLL["<b>poller</b> — Deployment<br/><i>intraday, NYSE calendar</i>"]
+        QUAL["<b>check-quality</b><br/><i>declarative checks</i>"]
+    end
+
+    subgraph db["Postgres — Neon (managed)"]
+        direction TB
+        BRONZE["<b>bronze</b><br/><i>raw jsonb, append-only</i>"]
+        SILVER["<b>silver</b><br/><i>typed, deduped by natural key</i>"]
+        GOLD["<b>gold</b><br/><i>discount, z-score, yield,<br/>backtest, data quality</i>"]
+        BRONZE --> SILVER --> GOLD
+    end
+
+    subgraph obs["Observability"]
+        PUSH["Pushgateway<br/><i>batch jobs push</i>"]
+        PROM["Prometheus + PVC<br/><i>scrapes the poller</i>"]
+        PUSH --> PROM
+    end
+
+    GRAF["<b>Grafana</b><br/><i>3 dashboards, provisioned as code<br/>reads via a read-only role</i>"]
+
+    YF & CC & FRED & ECB --> CRON
+    YF --> POLL
+    CRON & POLL --> BRONZE
+    GOLD --> QUAL
+    QUAL --> GOLD
+    CRON --> PUSH
+    POLL --> PROM
+    GOLD --> GRAF
+    PROM --> GRAF
+```
+
+Deployment is a separate loop: **push to git → GitHub Actions builds and pushes
+the image to GHCR → ArgoCD renders the Helm chart and syncs the cluster.** There
+is no `kubectl apply` in the deploy path. For a step-by-step walkthrough of a
+single datum from API call to panel, open
+[docs/arquitectura.html](docs/arquitectura.html) (self-contained, no build step).
+
+## What it does
+
+- **Idempotent ingestion with backfill.** Every ingester asks *"what is my
+  latest datum?"* and resumes from there, so the system heals itself after an
+  outage: one run closes a week-long gap. Prices for ~44 tickers via yfinance,
+  daily NAV per CEF from CEFConnect (the fragile piece, isolated in its own
+  job), CEF distributions, FRED macro series and the official ECB EUR/USD fixing.
+- **Intraday poller.** A crash-only Deployment that knows the real NYSE calendar
+  (holidays, half days, transatlantic DST via `exchange_calendars`), batches 1m
+  candles, sleeps interruptibly and exits cleanly on SIGTERM. Liveness is a
+  **heartbeat file** touched by the loop itself — deliberately not the `/metrics`
+  endpoint, which a separate daemon thread would keep answering `200` even with
+  the loop hung.
+- **Medallion on Postgres.** `bronze` (raw jsonb, append-only) → `silver`
+  (typed, deduped) → `gold` (views: signed discount, 252-session z-score,
+  *estimated* intraday discount, TTM yield on price and on NAV, Buffett
+  indicator, signal backtest).
+- **Grafana provisioned as code.** Dashboards and datasources live in the repo;
+  the pod is stateless on purpose. Postgres access is a **read-only role**
+  (`grafana_ro`, least privilege), and anonymous **viewer mode** is configuration
+  too, not a user clicked into a UI — with no PVC, such a user would evaporate on
+  the next restart.
+- **Context, not bare numbers.** A lone level ("credit spread 2.84%") can't be
+  judged. The gold layer computes percentile, z-score and *years of history
+  available* per macro series, and where the source is licence-limited to a
+  3-year rolling window, an unrestricted 40-year series is added **as a ruler** —
+  without replacing the relevant one.
+- **Declarative data quality.** Checks are **declared in
+  `config/quality_checks.yaml`** — adding one is editing YAML, the code doesn't
+  change. A runner executes them in a READ ONLY transaction, records the verdict
+  with its history in gold, and **exits non-zero** if any fails, so Kubernetes
+  marks the Job failed: data quality as a contract the orchestrator understands.
+  NAV, the fragile piece, gets a **second opinion** — cross-checked against
+  Yahoo's NAV ticker for the same fund, and `nav_quality` degrades itself to
+  *suspicious* when the two sources diverge by more than 2%.
+- **Packaged as a Helm chart.** A single multi-command image
+  (`sentinel migrate|ingest-*|check-quality|poller`), 7 CronJobs generated from
+  **one** template plus a list in `values.yaml`, and a switch per component: the
+  minimal deployment is 10 resources, the full one 24.
+
+## The payload is interchangeable; the platform isn't
+
+Everything that ties this to closed-end funds is **configuration**, and it lives
+in two files. Porting the platform to another data domain means, roughly:
+
+| To change | Edit | Note |
 |---|---|---|
-| 0 | Decisiones de arquitectura | ✅ |
-| 1 | Esquema medallón + 4 ingestores validados contra Neon | ✅ |
-| 2 | Contenerización (imagen única, non-root) | ✅ |
-| 3 | K8s: namespace, Secret, ConfigMap, CronJobs (validado en k3d) | ✅ |
-| 4 | Poller intradía (Deployment con horario de mercado) | ✅ |
-| 5 | Capa gold completa + dashboards Grafana provisionados | ✅ |
-| 5½ | Distribuciones + yield TTM (tabla, vista, CronJob y panel) | ✅ |
-| 5¾ | Flecos: yield en la tabla del universo, column guide, `intraday_exclude`, annotations de recortes | ✅ |
-| 6 | CI/CD: GitHub Actions → GHCR + lock de dependencias (`uv.lock`) | ✅ 0.8.0 publicada en GHCR |
-| 7a | Secretos GitOps-ready: cifrados en el repo con SOPS + age | ✅ |
-| 7b | ArgoCD + KSOPS: el clúster se sincroniza solo desde git | ✅ |
-| 8 | Alertas Telegram con reglas declarativas + digest diario | ⬜ |
-| 8½ | Backtest de la señal de descuento (¿revierte tras cruzar z-score −2?) | ✅ |
-| 9 | Prometheus + PVC (observabilidad completa) | ✅ |
-| 10 | Calidad de dato como framework declarativo (checks en config, cross-check del NAV, panel "Data Quality") | ✅ |
-| 11 | Helm chart, score opcional, README final con guía de portado | 🔄 chart hecho |
-| 12 | Acceso remoto: túnel `cloudflared` como interruptor de demo + Grafana en modo visitante | ✅ |
+| The universe of series | `config/tickers.yaml` | Adding a 40-year macro series to the project was a 1-line edit — no code, no schema change |
+| Quality rules | `config/quality_checks.yaml` | SQL + thresholds; the runner doesn't change |
+| A new ingester | `values.yaml` → `cronjobs:` | Four lines: name, schedule, CLI face, which config to mount |
+| What gets deployed | `values.yaml` → `*.enabled` | `--set prometheus.enabled=false` for a cluster with no disk to spare |
+| The schema | `db/migrations/` | Numbered, idempotent, applied by a Job |
 
-> **Reencuadre (2026-07-08):** este proyecto no compite en producto financiero — compite en **arquitectura portable**. La tesis CEF es la carga útil demostrativa; el patrón (medallón, ingesta idempotente, config-driven, crash-only, GitOps) es lo que se deja a prueba de bombas y se puede aplicar a cualquier otro dominio de datos.
+What you'd write yourself is the ingester body — and even that has a shape to
+copy: `src/sentinel/ingest/common.py` holds the backfill pattern that every
+ingester in this repo reuses.
 
-El detalle vivo de cada decisión (con el porqué y las lecciones aprendidas) está en **[DECISIONS.md](DECISIONS.md)**; el contexto completo del proyecto, en **[PROJECT_BRIEF.md](PROJECT_BRIEF.md)**. Para entender **cómo circula el dato** de una API a un panel —quién hace qué, cómo y por qué— hay un diagrama autocontenido en **[docs/arquitectura.html](docs/arquitectura.html)** (se abre con doble clic, sin dependencias).
+## Architectural honesty
 
-## Nota de honestidad arquitectónica
+This architecture is **deliberately over-engineered** for demonstration and
+learning (Kubernetes, observability, CD). For actual personal use, a cron job
+and a SQLite file would do. The point is to build the platform version while
+knowing, at every decision, what the simple alternative would have been — and
+writing that down. That record is [DECISIONS.md](DECISIONS.md): 58 numbered
+decisions with their reasoning, their discarded alternatives and the lessons
+that cost something. **It is in Spanish, and it is the most valuable file in the
+repo.**
 
-Esta arquitectura está **deliberadamente sobredimensionada** con fines demostrativos y de aprendizaje (Kubernetes, observabilidad, CD). Para el uso personal real bastaría un cron y una base SQLite. La gracia está en construir la versión "de plataforma" sabiendo en cada decisión cuál sería la alternativa simple — y documentándolo.
+## Portable is not the same as permanent
 
-## Portable no es lo mismo que permanente
+Two properties that are easy to conflate:
 
-Conviene separar dos propiedades que se confunden:
+- **Portability — achieved.** Everything needed to rebuild the system travels:
+  the Helm chart, the ArgoCD Applications, the dashboards, the Prometheus config
+  and even the **secrets, encrypted** (SOPS + age). The image lives in GHCR, the
+  data in Neon. The only secret outside git is the age key, which travels with
+  you. Destroying the cluster and rebuilding it from scratch in minutes is part
+  of the normal workflow — it has been done several times.
+- **Permanence (high availability) — pending.** The dev cluster is k3d inside
+  Docker Desktop on a laptop. When the laptop is off, nobody runs: the ingestion
+  CronJobs don't fire and they do **not** recover missed nights beyond
+  `startingDeadlineSeconds`.
 
-- **Portabilidad — conseguida.** *Todo* lo necesario para reconstruir el sistema viaja: el **chart de Helm** (`Chart.yaml`, `values.yaml`, `templates/`), las Applications de ArgoCD (`deploy/gitops/`), los dashboards, la config de Prometheus y hasta los **secretos, cifrados** (`deploy/secrets/`). La imagen vive en GHCR y los datos en Neon. El único secreto fuera de git es la clave age, que viaja contigo. Borrar el clúster y rehacerlo desde cero en minutos es parte del flujo normal — se ha hecho varias veces.
-- **Permanencia (alta disponibilidad) — pendiente.** El clúster de desarrollo es k3d dentro de Docker Desktop, en un portátil. Cuando el portátil se apaga, no corre nadie: los CronJobs de ingesta no se ejecutan y **no recuperan** las noches perdidas más allá de `startingDeadlineSeconds`.
+What saves the data across that gap is not the orchestrator but the **idempotent
+backfill**. Kubernetes provides *process* robustness (a pod dies, a node falls,
+someone drifts the cluster by hand); *data* robustness belongs to the
+application. This got demonstrated without being staged: the poller died mid-day
+and the cluster missed an entire trading session — and the next day's single run
+recovered 13,612 candles across 43 tickers.
 
-Lo que salva el dato en ese hueco no es el orquestador, sino el **backfill idempotente**: cada ingestor pregunta "¿cuál es mi último dato?" y sigue desde ahí, así que una sola ejecución tapa días de parón. Kubernetes aporta robustez de *proceso* (pod que muere, nodo que cae, deriva manual); la robustez del *dato* es de la aplicación. La permanencia llega con la fase pendiente: desplegar la misma configuración, sin cambiar una línea, en un servidor que no se apaga.
+## Status
 
-## Arranque rápido
+| Phase | Contents | Status |
+|---|---|---|
+| 0 | Architecture decisions | ✅ |
+| 1 | Medallion schema + 4 ingesters validated against Neon | ✅ |
+| 2 | Containerisation (single image, non-root) | ✅ |
+| 3 | K8s: namespace, Secret, ConfigMap, CronJobs | ✅ |
+| 4 | Intraday poller (Deployment with market-hours logic) | ✅ |
+| 5 | Full gold layer + provisioned Grafana dashboards | ✅ |
+| 5½ | Distributions + TTM yield | ✅ |
+| 6 | CI/CD: GitHub Actions → GHCR + dependency lock | ✅ |
+| 7 | GitOps-ready secrets (SOPS + age) and ArgoCD + KSOPS | ✅ |
+| 8 | Telegram alerts with declarative rules | ⬜ parked |
+| 8½ | Backtest of the discount signal | ✅ |
+| 9 | Prometheus + PVC (full observability) | ✅ |
+| 10 | Data quality as a declarative framework | ✅ |
+| 11 | Helm chart, composite score, this README | ✅ |
+| 12 | Remote access: `cloudflared` demo switch + viewer mode | ✅ |
 
-> ¿Solo quieres **verlo funcionando** en una máquina que no es la tuya?
-> Ve a **[DEMO.md](DEMO.md)**: dashboards con datos reales en ~3 minutos.
-> Ahí está también el **interruptor de demo** para enseñarlo a distancia
-> (`cloudflared`, sin abrir puertos ni IP pública) — con el aviso de por qué
-> se apaga al terminar: la URL de un *quick tunnel* no es un secreto.
+## Quick start
+
+> Just want to **see it running** on a machine that isn't yours?
+> Go to **[DEMO.md](DEMO.md)**: dashboards with real data in ~3 minutes.
 
 ```bash
-# 1. Configuración. Si tienes la clave age del proyecto, el .env se genera solo
-#    desde el secreto CIFRADO del repo (no hay que copiar credenciales a mano):
-./scripts/env-from-secret.sh prod        # o 'local' para el Postgres del compose
-#    Sin la clave age: cp .env.example .env y rellenarlo a mano.
+# 1. Config. With the project's age key, .env is generated from the ENCRYPTED
+#    secret in the repo — no credentials copied by hand:
+./scripts/env-from-secret.sh prod        # or 'local' for the compose Postgres
+#    Without the age key: cp .env.example .env and fill it in.
 
-# 2. Stack local de desarrollo (Postgres + Grafana + Prometheus + Pushgateway)
+# 2. Local dev stack (Postgres + Grafana + Prometheus + Pushgateway)
 docker compose -f docker-compose.dev.yml up -d
 
-# 3. Instalar y ejecutar (uv es lo que usa el CI; pip install -e también vale)
+# 3. Install and run
 uv sync --extra dev
-sentinel migrate              # aplica las migraciones SQL
-sentinel ingest-prices        # backfill del universo completo
+sentinel migrate              # apply SQL migrations
+sentinel ingest-prices        # backfill the full universe
 sentinel ingest-macro && sentinel ingest-fx && sentinel ingest-nav
-sentinel ingest-distributions # distribuciones de los CEFs (yield)
-sentinel ingest-nav-proxy     # NAV de la segunda fuente (para el cross-check)
-sentinel check-quality        # corre los checks de config/quality_checks.yaml
-sentinel poller               # (opcional) intradía en vivo, Ctrl+C para salir
-pytest                        # tests de la lógica pura
-
-# 4. Kubernetes local (k3d) — requiere cgroup v2 (ver DECISIONS.md #19)
-# --api-port fija un puerto BAJO a propósito: los aleatorios de k3d caen en
-# rangos que WinNAT excluye y el clúster queda incomunicado (DECISIONS.md #22)
-k3d cluster create sentinel --api-port 6550
-# No hace falta construir ni importar la imagen: el chart apunta a la de GHCR,
-# que es pública y el clúster se la baja solo.
-helm install sentinel . -n sentinel --create-namespace
-# El Secret NO lo crea el chart (decisión #39): vive cifrado en el repo y se
-# aplica descifrándolo al vuelo. Sin este paso, los pods no arrancan.
-sops -d deploy/secrets/sentinel-env.prod.yaml | kubectl apply -f -
-# El esquema (idempotente: si ya está aplicado, no hace nada)
-helm template . --set migrations.autoRun=true -s templates/job-migrate.yaml \
-  | kubectl -n sentinel create -f -
-# Grafana: kubectl -n sentinel port-forward svc/grafana 3000:3000 → http://localhost:3000
+sentinel ingest-distributions
+sentinel ingest-nav-proxy     # second NAV source, for the cross-check
+sentinel check-quality        # run config/quality_checks.yaml
+sentinel poller               # (optional) live intraday, Ctrl+C to stop
+pytest                        # 56 tests of the pure logic
 ```
 
-### Portar esto a otro dominio de datos
-
-La plataforma no sabe nada de fondos: lo que la ata a los CEFs es
-**configuración**, y toda vive en dos sitios. `values.yaml` es la guía de
-portado — cambiar de dominio es, en lo que respecta al despliegue, escribir
-otro fichero de valores:
+### On Kubernetes
 
 ```bash
-# Un despliegue mínimo, sin observabilidad ni UI: solo el carril de ingesta
-helm install sentinel . -n sentinel \
-  --set prometheus.enabled=false --set grafana.enabled=false \
-  --set pushgateway.enabled=false --set cloudflared.enabled=false \
-  --set poller.enabled=false        # 10 recursos en vez de 24
+# k3d locally. --api-port is not decorative: k3d's random port often lands in a
+# range Windows reserves, and the cluster becomes unreachable after a Docker
+# restart (DECISIONS.md #22).
+k3d cluster create sentinel --api-port 6550
+
+helm install sentinel . -n sentinel --create-namespace
+# The Secret is NOT created by the chart (#39): it lives encrypted in the repo
+# and is applied by decrypting on the fly. Without this, pods won't start.
+sops -d deploy/secrets/sentinel-env.prod.yaml | kubectl apply -f -
+# Schema (idempotent: a no-op if already applied)
+helm template . --set migrations.autoRun=true -s templates/job-migrate.yaml \
+  | kubectl -n sentinel create -f -
+
+kubectl -n sentinel port-forward svc/grafana 3000:3000   # → localhost:3000
 ```
 
-Añadir un ingestor nuevo son **cuatro líneas** en la lista `cronjobs` de
-`values.yaml` (nombre, horario, la cara del CLI y qué configuración se le
-monta) — no hay ningún fichero que copiar.
+With ArgoCD in place, none of the above is the deploy path: **deploying is
+making a commit.** ArgoCD renders the chart with its own bundled Helm and
+reconciles continuously — a manual `kubectl apply` gets reverted within minutes,
+correctly, because git doesn't have it.
 
-## Licencia
+## Known limitations
 
-[MIT](LICENSE) — úsalo, cópialo y aprende de él libremente (bajo el disclaimer de arriba).
+Documented rather than hidden — the sources have real holes:
+
+- **NAV backfill is limited to ~1 year** (CEFConnect's API gives no more daily
+  history), so discounts before that simply don't exist.
+- **The HY spread series is licence-limited to a ~3-year rolling window** in
+  FRED. That's why a second, unrestricted series is ingested as a historical
+  ruler.
+- **Three CEFs have no NAV proxy on Yahoo** (BCAT, ADX, ARDC), so the NAV
+  cross-check covers 16 of 19. A documented gap, not an error.
+- **The backtest sample is small and correlated**: 43 signals, half of them from
+  a single March 2026 sell-off. The panel says so on its face.
+
+## License
+
+[MIT](LICENSE) — use it, copy it and learn from it freely (under the disclaimer
+above).
