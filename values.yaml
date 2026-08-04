@@ -67,6 +67,19 @@ secretName: sentinel-env
 #   --set cloudflared.enabled=false sin túnel (servidor con acceso propio)
 #   --set poller.enabled=false     solo carril lento (máquina que no está en horario de mercado)
 
+# Migraciones del esquema. Ver la cabecera de templates/job-migrate.yaml: con
+# autoRun en true entran como hook PreSync de ArgoCD y corren solas antes del
+# rollout; el precio es que una migración rota BLOQUEA el sync. Cambio de
+# contrato, no de comodidad — por eso viene apagado.
+migrations:
+  autoRun: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
 # El poller intradía: el único proceso vivo de la aplicación.
 poller:
   enabled: true

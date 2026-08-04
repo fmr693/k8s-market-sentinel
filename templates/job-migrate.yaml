@@ -1,0 +1,72 @@
+{{/*
+Job de migración del esquema.
+
+DOS MODOS, y la diferencia es de contrato, no de comodidad:
+
+  migrations.autoRun: false  (DEFECTO — el comportamiento de siempre)
+    El Job no forma parte del release. Se lanza a mano cuando hay migraciones
+    nuevas, renderizándolo desde este mismo chart:
+
+      helm template . --set migrations.autoRun=true -s templates/job-migrate.yaml \
+        | kubectl -n sentinel create -f -
+
+    Aunque sea manual, esto ya arregla un fleco: hasta ahora el Job vivía
+    fuera de la kustomization y su tag de imagen se mantenía A MANO ("al subir
+    newTag, subir también esta etiqueta"). Dos sitios con la misma versión y
+    ninguna forma de enterarse si se separaban. Ahora sale del mismo helper
+    que todo lo demás.
+
+  migrations.autoRun: true
+    El Job entra en el release como HOOK pre-install/pre-upgrade, que ArgoCD
+    traduce a PreSync: las migraciones corren SOLAS antes de que ruede la
+    imagen nueva. Es lo que un despliegue GitOps promete — hoy hay un paso
+    manual entre "hago push" y "el esquema está al día", y ese hueco es donde
+    caben los errores.
+
+    EL PRECIO, que hay que aceptar a sabiendas: una migración que falla
+    BLOQUEA el sync. Deja de ser cierto que desplegar siempre pasa. Es
+    probablemente lo correcto —desplegar código nuevo contra un esquema viejo
+    es peor— pero es un cambio de contrato y por eso no se activa solo.
+
+`generateName` y no un nombre fijo: cada lanzamiento es un Job nuevo y el
+historial de migraciones queda en pods consultables. Un Job completado es
+inmutable, no se puede re-aplicar. `ttlSecondsAfterFinished` los recoge solo
+al cabo de un día, para que el historial exista pero no se acumule sin fin.
+*/}}
+{{- if .Values.migrations.autoRun }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: sentinel-migrate-
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sentinel.labels" . | nindent 4 }}
+  annotations:
+    # ArgoCD traduce estos hooks de Helm a su fase PreSync.
+    helm.sh/hook: pre-install,pre-upgrade
+    # Peso negativo: si algún día hay más hooks, este va primero. El esquema
+    # es la precondición de todo lo demás.
+    helm.sh/hook-weight: "-5"
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        {{- include "sentinel.labels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: migrate
+          image: {{ include "sentinel.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["migrate"]
+          envFrom:
+            - secretRef:
+                name: {{ .Values.secretName }}
+          resources:
+            {{- toYaml .Values.migrations.resources | nindent 12 }}
+{{- end }}

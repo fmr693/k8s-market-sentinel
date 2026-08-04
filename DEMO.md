@@ -83,7 +83,11 @@ docker compose -f docker-compose.dev.yml down
 Enseña la ingeniería: GitOps, observabilidad, secretos cifrados, autorreparación.
 
 ### Requisitos añadidos
-`k3d` y `kubectl` ([k3d.io](https://k3d.io) · `winget install Kubernetes.kubectl`).
+`k3d`, `kubectl` y `helm` ([k3d.io](https://k3d.io) ·
+`winget install Kubernetes.kubectl` · `winget install Helm.Helm`).
+
+> `helm` solo hace falta para el despliegue **a mano**. Por GitOps no: el
+> repo-server de ArgoCD trae el suyo embebido y renderiza el chart él solo.
 
 > **Arrancar Docker NO arranca Kubernetes.** El clúster k3d son contenedores
 > Docker que, al apagar Docker Desktop, mueren y **se quedan parados**: no
@@ -103,13 +107,14 @@ k3d cluster start sentinel
 k3d cluster create sentinel --api-port 6550
 
 # 2. La app (la imagen se baja sola de GHCR: es pública)
-kubectl apply -k .
+helm install sentinel . -n sentinel --create-namespace
 
 # 3. El Secret, descifrado al vuelo (nunca toca disco en claro)
 sops -d deploy/secrets/sentinel-env.prod.yaml | kubectl apply -f -
 
 # 4. El esquema (idempotente: si ya está aplicado, no hace nada)
-kubectl -n sentinel create -f deploy/k8s/job-migrate.yaml
+helm template . --set migrations.autoRun=true -s templates/job-migrate.yaml \
+  | kubectl -n sentinel create -f -
 
 # 5. Comprobar
 kubectl -n sentinel get pods,cronjobs,pvc

@@ -2,9 +2,15 @@
 #
 # DOS documentos (ver deploy/gitops/local/kustomization.yaml para el porqué del
 # reparto):
-#   - sentinel-local: la APP (raíz plugin-free) — namespace, CronJobs, poller,
-#     Grafana, ConfigMaps.
+#   - sentinel-local: la APP, el chart de Helm de la raíz — namespace,
+#     CronJobs, poller, Grafana, Prometheus, ConfigMaps.
 #   - sentinel-local-secrets: SOLO el Secret, descifrado por KSOPS.
+#
+# El reparto en dos, que nació para romper un ciclo de kustomize, resultó ser
+# lo que abarató la migración a Helm: KSOPS es un plugin de KUSTOMIZE, y al
+# vivir los secretos en su propia Application no hubo que hacerlos convivir con
+# el chart. La app se renderiza con Helm; el Secret sigue con kustomize+KSOPS,
+# cada uno con la herramienta que le va.
 # Ambas con automated+prune+selfHeal: lo que se va de git se va del clúster, y
 # si alguien toca el clúster a mano ArgoCD lo revierte — la "regeneración
 # automática" aplicada también al DESPLIEGUE.
@@ -21,7 +27,12 @@ spec:
   source:
     repoURL: https://github.com/fmr693/k8s-market-sentinel.git
     targetRevision: main
-    path: . # la raíz: todo el despliegue de la app, sin plugins
+    path: . # la raíz: el chart de Helm con todo el despliegue de la app
+    # Explícito, no autodetectado: ver el comentario en la Application de prod.
+    helm:
+      releaseName: sentinel
+      valueFiles:
+        - values.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: sentinel

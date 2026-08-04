@@ -20,11 +20,23 @@ spec:
   source:
     repoURL: https://github.com/fmr693/k8s-market-sentinel.git
     targetRevision: main
-    path: . # la raíz: todo el despliegue de la app, sin plugins
+    path: . # la raíz: el chart de Helm con todo el despliegue de la app
+    # Declarado EXPLÍCITO aunque ArgoCD sabría autodetectarlo por el Chart.yaml
+    # de la raíz: el tipo de fuente decide cómo se renderiza todo el despliegue
+    # y no debe depender de qué fichero encuentre primero un autodetector.
+    # (Por eso mismo la raíz no puede tener a la vez Chart.yaml y
+    # kustomization.yaml — al migrar a Helm, el segundo se borró.)
+    #
+    # El repo-server renderiza con SU Helm embebido (3.19.4), no con el de la
+    # máquina de desarrollo: el chart se mantiene compatible con Helm 3.
+    helm:
+      releaseName: sentinel
+      valueFiles:
+        - values.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: sentinel
-  # El túnel de demo (deploy/k8s/cloudflared.yaml) se declara con replicas: 0 y
+  # El túnel de demo (templates/cloudflared.yaml) se declara con replicas: 0 y
   # se enciende A MANO mientras dura la demo. Sin esta excepción, el selfHeal
   # revertiría el `kubectl scale --replicas=1` a los pocos minutos y el túnel
   # se caería en mitad de la demostración.

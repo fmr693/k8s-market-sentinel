@@ -16,10 +16,10 @@ Plataforma **Kubernetes-nativa** de vigilancia de CEFs (closed-end funds) de cr�
   - Fixing oficial EUR/USD del BCE (frankfurter).
 - **Poller intradía**: Deployment crash-only con calendario real de la NYSE (festivos, medias sesiones, DST transatlántico vía `exchange_calendars`), velas 1m en batch, sueño interrumpible y salida limpia con SIGTERM.
 - **Medallón sobre Postgres** (Neon, gestionado): `bronze` (crudo jsonb, append-only) → `silver` (tipado, deduplicado por clave natural) → `gold` (vistas: descuento con signo, z-score 252 sesiones, descuento intradía ESTIMADO, yield TTM sobre precio y sobre NAV, indicador Buffett).
-- **Grafana aprovisionado como código**: dashboards JSON y datasource en el repo, pod sin estado (ConfigMaps generados por kustomize), rol de Postgres **solo lectura** (`grafana_ro`, mínimo privilegio). El **modo visitante** (entrar sin login, en rol de solo lectura, aterrizando directo en el dashboard) también es configuración versionada, no un usuario creado a mano: sin PVC, un usuario de la UI se evaporaría en el siguiente reinicio.
+- **Grafana aprovisionado como código**: dashboards JSON y datasource en el repo, pod sin estado (ConfigMaps generados por el chart desde esos ficheros), rol de Postgres **solo lectura** (`grafana_ro`, mínimo privilegio). El **modo visitante** (entrar sin login, en rol de solo lectura, aterrizando directo en el dashboard) también es configuración versionada, no un usuario creado a mano: sin PVC, un usuario de la UI se evaporaría en el siguiente reinicio.
 - **Contexto, no números desnudos**: un nivel suelto ("diferencial de crédito 2,84 %") no se puede juzgar. La capa gold calcula **percentil, z-score y años de historia disponibles** de cada serie macro, y donde la fuente está limitada por licencia a una ventana de 3 años se añade una serie **no restringida con 40 años** como regla de medir — sin sustituir a la relevante, que sigue siendo la del semáforo.
 - **Calidad de dato declarativa**: los checks (frescura por fuente, NAVs rancios, divergencia entre fuentes) se **declaran en `config/quality_checks.yaml`** — añadir uno es editar YAML, el código no cambia; un runner los ejecuta en transacción READ ONLY, guarda el veredicto con su historial en gold y sale con código 1 si alguno falla. El NAV, la pieza frágil, tiene **segunda opinión**: se contrasta con el que publica Yahoo para el mismo fondo y `nav_quality` se degrada sola a `sospechoso` si discrepan más de un 2%.
-- **Kubernetes**: imagen única multi-comando (`sentinel migrate|ingest-prices|ingest-nav|ingest-nav-proxy|ingest-macro|ingest-fx|ingest-distributions|check-quality|poller`), 7 CronJobs del carril lento con `timeZone: Europe/Madrid`, Deployment del poller con liveness por fichero-latido, ConfigMap del universo de tickers y Secret generados con kustomize.
+- **Kubernetes, empaquetado como chart de Helm**: imagen única multi-comando (`sentinel migrate|ingest-prices|ingest-nav|ingest-nav-proxy|ingest-macro|ingest-fx|ingest-distributions|check-quality|poller`), 7 CronJobs del carril lento generados desde **una** plantilla y una lista en `values.yaml` (`timeZone: Europe/Madrid`), Deployment del poller con liveness por fichero-latido, y ConfigMaps generados desde los ficheros de configuración del repo. Cada componente tiene su interruptor: el despliegue mínimo son 10 recursos; el completo, 24.
 
 ## Estado (fases)
 
@@ -40,7 +40,7 @@ Plataforma **Kubernetes-nativa** de vigilancia de CEFs (closed-end funds) de cr�
 | 8½ | Backtest de la señal de descuento (¿revierte tras cruzar z-score −2?) | ✅ |
 | 9 | Prometheus + PVC (observabilidad completa) | ✅ |
 | 10 | Calidad de dato como framework declarativo (checks en config, cross-check del NAV, panel "Data Quality") | ✅ |
-| 11 | Helm chart, score opcional, README final con guía de portado | ⬜ |
+| 11 | Helm chart, score opcional, README final con guía de portado | 🔄 chart hecho |
 | 12 | Acceso remoto: túnel `cloudflared` como interruptor de demo + Grafana en modo visitante | ✅ |
 
 > **Reencuadre (2026-07-08):** este proyecto no compite en producto financiero — compite en **arquitectura portable**. La tesis CEF es la carga útil demostrativa; el patrón (medallón, ingesta idempotente, config-driven, crash-only, GitOps) es lo que se deja a prueba de bombas y se puede aplicar a cualquier otro dominio de datos.
@@ -55,7 +55,7 @@ Esta arquitectura está **deliberadamente sobredimensionada** con fines demostra
 
 Conviene separar dos propiedades que se confunden:
 
-- **Portabilidad — conseguida.** *Todo* lo necesario para reconstruir el sistema viaja: los manifests de Kubernetes (`deploy/k8s/`), el kustomize, las Applications de ArgoCD (`deploy/gitops/`), los dashboards, la config de Prometheus y hasta los **secretos, cifrados** (`deploy/secrets/`). La imagen vive en GHCR y los datos en Neon. El único secreto fuera de git es la clave age, que viaja contigo. Borrar el clúster y rehacerlo desde cero en minutos es parte del flujo normal — se ha hecho varias veces.
+- **Portabilidad — conseguida.** *Todo* lo necesario para reconstruir el sistema viaja: el **chart de Helm** (`Chart.yaml`, `values.yaml`, `templates/`), las Applications de ArgoCD (`deploy/gitops/`), los dashboards, la config de Prometheus y hasta los **secretos, cifrados** (`deploy/secrets/`). La imagen vive en GHCR y los datos en Neon. El único secreto fuera de git es la clave age, que viaja contigo. Borrar el clúster y rehacerlo desde cero en minutos es parte del flujo normal — se ha hecho varias veces.
 - **Permanencia (alta disponibilidad) — pendiente.** El clúster de desarrollo es k3d dentro de Docker Desktop, en un portátil. Cuando el portátil se apaga, no corre nadie: los CronJobs de ingesta no se ejecutan y **no recuperan** las noches perdidas más allá de `startingDeadlineSeconds`.
 
 Lo que salva el dato en ese hueco no es el orquestador, sino el **backfill idempotente**: cada ingestor pregunta "¿cuál es mi último dato?" y sigue desde ahí, así que una sola ejecución tapa días de parón. Kubernetes aporta robustez de *proceso* (pod que muere, nodo que cae, deriva manual); la robustez del *dato* es de la aplicación. La permanencia llega con la fase pendiente: desplegar la misma configuración, sin cambiar una línea, en un servidor que no se apaga.
@@ -92,15 +92,36 @@ pytest                        # tests de la lógica pura
 # --api-port fija un puerto BAJO a propósito: los aleatorios de k3d caen en
 # rangos que WinNAT excluye y el clúster queda incomunicado (DECISIONS.md #22)
 k3d cluster create sentinel --api-port 6550
-# No hace falta construir ni importar la imagen: el transformador de
-# kustomization.yaml apunta a la de GHCR, que es pública y el clúster se baja sola.
-kubectl apply -k .            # namespace + ConfigMaps + 7 CronJobs + poller + Grafana + Prometheus + Pushgateway
-# El Secret NO lo genera kustomize desde la fase 7a (decisión #39): vive cifrado
-# en el repo y se aplica descifrándolo al vuelo. Sin este paso, los pods no arrancan.
+# No hace falta construir ni importar la imagen: el chart apunta a la de GHCR,
+# que es pública y el clúster se la baja solo.
+helm install sentinel . -n sentinel --create-namespace
+# El Secret NO lo crea el chart (decisión #39): vive cifrado en el repo y se
+# aplica descifrándolo al vuelo. Sin este paso, los pods no arrancan.
 sops -d deploy/secrets/sentinel-env.prod.yaml | kubectl apply -f -
-kubectl -n sentinel create -f deploy/k8s/job-migrate.yaml
+# El esquema (idempotente: si ya está aplicado, no hace nada)
+helm template . --set migrations.autoRun=true -s templates/job-migrate.yaml \
+  | kubectl -n sentinel create -f -
 # Grafana: kubectl -n sentinel port-forward svc/grafana 3000:3000 → http://localhost:3000
 ```
+
+### Portar esto a otro dominio de datos
+
+La plataforma no sabe nada de fondos: lo que la ata a los CEFs es
+**configuración**, y toda vive en dos sitios. `values.yaml` es la guía de
+portado — cambiar de dominio es, en lo que respecta al despliegue, escribir
+otro fichero de valores:
+
+```bash
+# Un despliegue mínimo, sin observabilidad ni UI: solo el carril de ingesta
+helm install sentinel . -n sentinel \
+  --set prometheus.enabled=false --set grafana.enabled=false \
+  --set pushgateway.enabled=false --set cloudflared.enabled=false \
+  --set poller.enabled=false        # 10 recursos en vez de 24
+```
+
+Añadir un ingestor nuevo son **cuatro líneas** en la lista `cronjobs` de
+`values.yaml` (nombre, horario, la cara del CLI y qué configuración se le
+monta) — no hay ningún fichero que copiar.
 
 ## Licencia
 

@@ -80,10 +80,13 @@ chmod 600 ~/.config/sops/age/keys.txt
 ## 4. Desplegar
 
 ```bash
-kubectl apply -k .                 # namespace + ConfigMaps + CronJobs + poller + Grafana
+helm install sentinel . -n sentinel --create-namespace   # todo el despliegue
 sops -d deploy/secrets/sentinel-env.prod.yaml | kubectl apply -f -   # el Secret, descifrado al vuelo
-kubectl -n sentinel get cronjobs   # deben aparecer los 5, SUSPEND=False
+kubectl -n sentinel get cronjobs   # deben aparecer los 7, SUSPEND=False
 ```
+
+> El chart va con TODO encendido por defecto. En un servidor con su propio
+> acceso, el túnel de demo sobra: `--set cloudflared.enabled=false`.
 
 (Con ArgoCD —fase 7b— este paso manual desaparece: KSOPS descifra al sincronizar.)
 
@@ -110,7 +113,8 @@ un overlay `deploy/gitops/prod` con `sentinel-env.prod.yaml`.)
 ## 5. Migrar el esquema (acción puntual)
 
 ```bash
-kubectl -n sentinel create -f deploy/k8s/job-migrate.yaml
+helm template . --set migrations.autoRun=true -s templates/job-migrate.yaml \
+  | kubectl -n sentinel create -f -
 kubectl -n sentinel wait --for=condition=complete job -l app.kubernetes.io/part-of=k8s-market-sentinel --timeout=120s
 kubectl -n sentinel logs job/$(kubectl -n sentinel get jobs -o jsonpath='{.items[-1:].metadata.name}')
 ```
@@ -159,6 +163,7 @@ kubectl -n sentinel delete job smoke-fx
 - Los CronJobs quedan programados en `Europe/Madrid` (L-V). Si el servidor
   está apagado a esa hora, la ejecución se pierde **por diseño**: el backfill
   idempotente se pone al día en la siguiente (decisión #18 de DECISIONS.md).
-- Actualizar imagen en el futuro: build + push con tag nuevo → cambiar
-  `newTag` en `kustomization.yaml` (y la etiqueta de `job-migrate.yaml`) →
-  `kubectl apply -k .`
+- Actualizar imagen en el futuro: etiquetar `v*` (el CI construye y publica en
+  GHCR) → subir `appVersion` en `Chart.yaml` → commit. **Un solo sitio**: el
+  Job de migración y todos los workloads salen del mismo helper, así que ya no
+  hay dos etiquetas que mantener sincronizadas a mano.
