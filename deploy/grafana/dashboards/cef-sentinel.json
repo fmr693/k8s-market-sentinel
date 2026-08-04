@@ -1316,6 +1316,128 @@
         "mode": "markdown",
         "content": "**Thesis under test:** when a CEF's discount becomes anomalously wide (z-score crosses below **-2**), does the discount *revert* (narrow) and the *price* rise over the next 1 / 3 / 6 months?\n\n- **Discount reverted %** / **Price up %** = share of *matured* signals where it happened.\n- **Sampling caveat:** so far ~half the signals come from the **2026-03 credit sell-off**, where nearly the whole universe crossed -2 at once and rebounded together. Those are **correlated**, not independent - a high hit rate today reflects *one episode*, not a proven edge.\n- **+6m has not matured yet** (needs 6 months of forward data). The sample grows with every accumulated trading day.\n- *Mechanical note:* a z-score is a deviation from a 1-year moving average, so some reversion is built in. **Price return** is the more independent signal."
       }
+    },
+    {
+      "id": 23,
+      "type": "table",
+      "title": "Composite score - OPINIONATED, read the caveats first",
+      "description": "A convenience ranking, not a signal. The weights are an opinion expressed as arithmetic; they have no backtest behind them. The only thing here with evidence is the z-score, and even that is dominated by one cluster of correlated signals (see the backtest panel). Components are shown next to the total on purpose.",
+      "gridPos": {
+        "h": 10,
+        "w": 14,
+        "x": 0,
+        "y": 64
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "-- Score compuesto -- OPINABLE A PROPOSITO. Ver la nota del panel.\n--\n-- Los pesos viven AQUI, en la query del panel, y no en una vista de gold, y no\n-- es pereza: es donde mas visible resulta que son una OPINION. Cualquiera que\n-- abra el panel los lee. En gold quedarian con rango de verdad de negocio, que\n-- es justo lo que no tienen. Contradice la #26 (\"la semantica vive en gold\") y\n-- el contrapeso es deliberado.\n--\n-- Cada componente se normaliza a percentil DENTRO del universo (PERCENT_RANK):\n-- comparar un z-score con un yield en porcentaje seria sumar peras y manzanas,\n-- y cualquier escalado absoluto exigiria elegir constantes todavia mas\n-- arbitrarias que los pesos. El percentil solo afirma \"de estos 19, este esta\n-- arriba o abajo\" -- que es exactamente lo que un ranking puede sostener.\nWITH base AS (\n    SELECT\n        s.ticker,\n        s.premium_discount,\n        s.zscore,\n        s.nav_quality,\n        y.yield_ttm_on_price_pct AS yield_pct,\n        -- ¿Recorte de distribucion en los ultimos 12 meses? En un CEF de credito\n        -- el yield ES la tesis, asi que un recorte reciente pesa en contra por\n        -- mucho que el descuento se haya abierto -- a menudo se abre POR el\n        -- recorte: el mercado ya lo sabe y el descuento no es una ganga.\n        EXISTS (\n            SELECT 1 FROM gold.distribution_cuts c\n            WHERE c.ticker = s.ticker AND c.ex_date >= current_date - 365\n        ) AS recorte_reciente\n    FROM gold.cef_snapshot s\n    LEFT JOIN gold.yield_ttm y ON y.ticker = s.ticker\n    -- Sin historia suficiente el z-score no significa nada (mismo umbral de\n    -- 126 sesiones que usa el backtest de la 8 1/2 para admitir una senal).\n    WHERE s.n_obs >= 126\n),\npercentiles AS (\n    SELECT\n        *,\n        -- OJO CON EL SENTIDO: PERCENT_RANK() da 0 a la PRIMERA fila del orden,\n        -- asi que el ORDER BY va al REVES de lo que uno escribiria por instinto.\n        -- Las dos primeras versiones de esta query tenian un componente\n        -- invertido cada una, y las dos producian una tabla perfectamente\n        -- plausible: rankings creibles con la senal del reves. Solo se ve\n        -- ejecutandola y mirando los extremos.\n        --   zscore DESC  -> el mas NEGATIVO (mas barato frente a SU PROPIA\n        --                   historia, la tesis del proyecto) queda el ultimo\n        --                   del orden y se lleva el percentil 100.\n        PERCENT_RANK() OVER (ORDER BY zscore DESC)::numeric   AS p_zscore,\n        --   yield ASC    -> el yield MAS ALTO queda el ultimo y se lleva el 100.\n        PERCENT_RANK() OVER (ORDER BY yield_pct ASC)::numeric AS p_yield\n    FROM base\n)\nSELECT\n    ticker                                        AS \"CEF\",\n    -- Positivos: dos componentes que suman 1. Negativos: penalizaciones\n    -- explicitas, no pesos -- son banderas rojas, no ejes de comparacion.\n    -- El NAV NO puntua en positivo (a media sesion casi todos estan\n    -- 'estimado', asi que premiarlo solo deflactaria el score de todos por\n    -- igual sin cambiar el orden); solo RESTA cuando esta mal de verdad.\n    round(100 * (0.60 * p_zscore + 0.40 * p_yield)\n          - CASE WHEN recorte_reciente THEN 15 ELSE 0 END\n          - CASE WHEN nav_quality IN ('rancio', 'sospechoso') THEN 10 ELSE 0 END\n    , 1)                                          AS \"Score\",\n    -- Los COMPONENTES, siempre al lado del total: sin ellos un ranking es un\n    -- oraculo. Con ellos se ve POR QUE puntua alto, que es lo unico util.\n    round(zscore, 2)                              AS \"z-score\",\n    round(100 * p_zscore)                         AS \"z pctl\",\n    round(yield_pct, 1)                           AS \"Yield %\",\n    round(100 * p_yield)                          AS \"yield pctl\",\n    CASE WHEN recorte_reciente THEN 'yes (-15)' ELSE 'no' END AS \"Cut 12m\",\n    CASE WHEN nav_quality IN ('rancio', 'sospechoso')\n         THEN nav_quality || ' (-10)' ELSE nav_quality END    AS \"NAV quality\",\n    round(100 * premium_discount, 2)              AS \"Discount %\"\nFROM percentiles\nORDER BY 2 DESC"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Score"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "#6a9fb5",
+                      "value": 50
+                    },
+                    {
+                      "color": "#7eb26d",
+                      "value": 75
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Cut 12m"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "yes (-15)": {
+                        "color": "red",
+                        "index": 0,
+                        "text": "yes (-15)"
+                      },
+                      "no": {
+                        "color": "text",
+                        "index": 1,
+                        "text": "no"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 24,
+      "type": "text",
+      "title": "How to read the score (and why you probably shouldn't)",
+      "gridPos": {
+        "h": 10,
+        "w": 10,
+        "x": 14,
+        "y": 64
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**This is the most arguable panel in the project, and it is here on purpose.**\n\n`Score = 60% z-score percentile + 40% yield percentile - 15 if distribution cut in 12m - 10 if NAV rancio/sospechoso`\n\n- **The weights are an opinion.** Why 60/40 and not 50/50? No reason that survives scrutiny. Nothing was optimised or backtested to pick them. A composite score always looks more rigorous than its inputs justify — that is precisely the trap, and the reason the components are shown next to the total: so you read *why* something ranks high instead of trusting the number.\n- **Percentiles are relative to these 19 funds only.** A score of 100 means \"cheapest of this list\", never \"cheap\". If the whole credit market is expensive, the top of this table is still expensive.\n- **It says nothing about *why* a fund is cheap.** A wide discount often reflects something real that the market already knows — leverage, credit quality, an upcoming cut. The cut penalty is a crude proxy for that, not a substitute for reading the fund.\n- **The z-score is the only component with any evidence behind it**, and the backtest panel above spells out its limits (43 signals, half of them from the same March 2026 sell-off).\n\n*Not investment advice. See the disclaimer in the README.*"
+      }
     }
   ],
   "links": [
