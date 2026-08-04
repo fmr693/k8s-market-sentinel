@@ -1,0 +1,45 @@
+# Qué NO empaqueta `helm package`. El chart vive en la raíz del repo (ver la
+# cabecera de Chart.yaml), así que sin esta lista se llevaría dentro el código
+# fuente, el entorno virtual y hasta los secretos cifrados.
+#
+# Ojo: config/ y deploy/grafana/ y deploy/prometheus/ NO se ignoran — son
+# ficheros que el chart LEE con .Files.Get para generar los ConfigMaps.
+
+# Control de versiones y CI
+.git/
+.github/
+.gitignore
+.gitattributes
+
+# Código de la aplicación (vive en la imagen, no en el chart)
+src/
+tests/
+db/
+scripts/
+.venv/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+pyproject.toml
+uv.lock
+Dockerfile
+.dockerignore
+docker-compose.dev.yml
+
+# Entorno local
+.env
+.env.example
+
+# Secretos cifrados: los aplica su propia Application de ArgoCD vía KSOPS,
+# NO el chart. Que estén cifrados no es motivo para empaquetarlos.
+deploy/secrets/
+.sops.yaml
+
+# GitOps: los manifiestos de las Applications son BOOTSTRAP (se aplican a mano,
+# ArgoCD no se gestiona a sí mismo), no parte del despliegue de la app.
+deploy/gitops/
+
+# Documentación
+*.md
+docs/
+LICENSE

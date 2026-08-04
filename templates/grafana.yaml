@@ -1,0 +1,146 @@
+{{/*
+Grafana SIN estado: ni PVC ni SQLite que cuidar. Todo lo que lo define entra
+por ConfigMaps (datasources + dashboards JSON del repo) y Secret (credenciales).
+El pod es desechable: muere y renace idéntico — la misma filosofía crash-only
+del poller, aplicada al visor. La verdad vive en Git; la UI es un borrador
+(exportar JSON -> commit -> desplegar).
+*/}}
+{{- if .Values.grafana.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sentinel.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  template:
+    metadata:
+      annotations:
+        # Cambiar un dashboard o un datasource cambia este hash -> cambia el pod
+        # template -> Kubernetes reinicia Grafana solo. Cierra el gotcha del
+        # `rollout restart` manual: el proveedor de dashboards NO relee el
+        # ConfigMap por su cuenta, ni con updateIntervalSeconds.
+        checksum/config: {{ include "sentinel.checksum" (list . (list "deploy/grafana/datasource-*.yaml" "deploy/grafana/dashboards-provider.yaml" "deploy/grafana/dashboards/*.json")) }}
+      labels:
+        app.kubernetes.io/name: grafana
+        {{- include "sentinel.labels" . | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true # la imagen oficial ya corre como uid 472 (grafana)
+      containers:
+        - name: grafana
+          image: {{ .Values.grafana.image }}
+          ports:
+            - containerPort: 3000
+              name: http
+          env:
+            # Env EXPLÍCITAS con secretKeyRef, y NO envFrom del Secret entero:
+            # Grafana es la pieza con UI expuesta — no debe ver DATABASE_URL
+            # (rol owner) ni la API key de FRED. Solo sus claves (decisión 5.3).
+            # Que esto siga siendo una lista explícita es la seguridad: un
+            # envFrom cómodo le daría todo el secreto al pod más expuesto.
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secretName }}
+                  key: GRAFANA_ADMIN_PASSWORD
+            {{- range .Values.grafana.secretEnv }}
+            - name: {{ . }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.secretName }}
+                  key: {{ . }}
+            {{- end }}
+            # Sin registro ni usuarios extra: herramienta personal.
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+            {{- if .Values.grafana.anonymous.enabled }}
+            # --- Acceso de visitante -----------------------------------------
+            # El visitante entra SIN login y en modo lectura. Por qué así y no un
+            # usuario "invitado" creado en la UI: esta Grafana no tiene PVC (ver
+            # cabecera) -> los usuarios viven en la SQLite del contenedor y se
+            # evaporan en cada reinicio. Como env var es CONFIGURACIÓN: viaja por
+            # git, la aplica ArgoCD y sobrevive a todo.
+            #
+            # Doble solo-lectura, independiente: el rol Viewer de Grafana no
+            # puede editar nada, y por debajo el datasource entra a Neon con
+            # grafana_ro, que tampoco puede escribir. El admin sigue con password.
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "true"
+            - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+              value: {{ .Values.grafana.anonymous.role | quote }}
+            # Explícito aunque sea el default: un Viewer NO debe poder abrir
+            # Explore y lanzar SQL a mano contra Neon.
+            - name: GF_USERS_VIEWERS_CAN_EDIT
+              value: "false"
+            # El visitante aterriza directamente en el dashboard del producto,
+            # sin navegar el menú. La ruta es la del ConfigMap montado abajo.
+            - name: GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH
+              value: /var/lib/grafana/dashboards/{{ .Values.grafana.anonymous.homeDashboard }}
+            {{- end }}
+          volumeMounts:
+            - name: provisioning-datasources
+              mountPath: /etc/grafana/provisioning/datasources
+              readOnly: true
+            - name: provisioning-dashboards
+              mountPath: /etc/grafana/provisioning/dashboards
+              readOnly: true
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+              readOnly: true
+          resources:
+            {{- toYaml .Values.grafana.resources | nindent 12 }}
+          # A DIFERENCIA del poller, Grafana SÍ recibe tráfico -> sí hay
+          # readinessProbe (decide si el Service le enruta) además de la
+          # liveness. El contraste entre ambos manifiestos es deliberado.
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+      volumes:
+        - name: provisioning-datasources
+          configMap:
+            name: grafana-provisioning-datasources
+        - name: provisioning-dashboards
+          configMap:
+            name: grafana-provisioning-dashboards
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
+---
+# NodePort: http://<ip-del-nodo>:30300, sin piezas extra (Ingress/LoadBalancer
+# quedan como mejora si algún día hace falta TLS/dominio propio). Para enseñarlo
+# fuera de la red local está el túnel de cloudflared, que no necesita ni esto.
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sentinel.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.grafana.service.type }}
+  selector:
+    app.kubernetes.io/name: grafana
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      {{- if eq .Values.grafana.service.type "NodePort" }}
+      nodePort: {{ .Values.grafana.service.nodePort }}
+      {{- end }}
+{{- end }}

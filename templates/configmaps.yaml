@@ -1,0 +1,95 @@
+{{/*
+Los ConfigMaps generados desde ficheros del repo — el equivalente de los
+configMapGenerator de kustomize.
+
+Aquí está el motivo por el que el chart vive en la RAÍZ: .Files.Get solo lee
+dentro del chart, y estos ficheros (config/, deploy/grafana/, deploy/prometheus/)
+son la fuente de verdad de la que también beben el docker-compose, los tests y
+el CLI local. Duplicarlos dentro de un chart en deploy/chart/ habría sido tener
+dos copias de config/tickers.yaml, exactamente lo que el diseño evita.
+
+NOMBRES ESTABLES, sin sufijo-hash (como el disableNameSuffixHash de kustomize):
+los CronJobs nacen en cada ejecución y siempre leen la versión vigente, y
+job-migrate referencia 'sentinel-env' sin adivinar sufijos.
+*/}}
+
+{{- /* Config de la aplicación: universo de tickers y checks de calidad. */ -}}
+{{- range $nombre, $cfg := .Values.configFiles }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $cfg.configMap }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "sentinel.labels" $ | nindent 4 }}
+data:
+  {{ $cfg.key }}: |
+    {{- $.Files.Get $cfg.source | nindent 4 }}
+{{- end }}
+
+{{- if .Values.grafana.enabled }}
+---
+{{/*
+Datasources de Grafana. Aprovisionados como código: el pod no tiene PVC, así
+que un datasource creado por la UI se evaporaría en el siguiente reinicio.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-provisioning-datasources
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sentinel.labels" . | nindent 4 }}
+data:
+  neon.yaml: |
+    {{- .Files.Get "deploy/grafana/datasource-neon.yaml" | nindent 4 }}
+  prometheus.yaml: |
+    {{- .Files.Get "deploy/grafana/datasource-prometheus.yaml" | nindent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-provisioning-dashboards
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sentinel.labels" . | nindent 4 }}
+data:
+  provider.yaml: |
+    {{- .Files.Get "deploy/grafana/dashboards-provider.yaml" | nindent 4 }}
+---
+{{/*
+Los dashboards. Se recorren con .Files.Glob en vez de listarlos: añadir un
+dashboard es dejar el JSON en la carpeta, sin tocar el chart. (Kustomize
+obligaba a listarlo también en kustomization.yaml.)
+
+Nota: el contenido NO se procesa como plantilla — .Files.Get devuelve texto —
+así que las llaves dobles que Grafana usa en las leyendas están a salvo.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sentinel.labels" . | nindent 4 }}
+data:
+  {{- range $ruta, $_ := .Files.Glob "deploy/grafana/dashboards/*.json" }}
+  {{ base $ruta }}: |
+    {{- $.Files.Get $ruta | nindent 4 }}
+  {{- end }}
+{{- end }}
+
+{{- if .Values.prometheus.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sentinel.labels" . | nindent 4 }}
+data:
+  prometheus.yml: |
+    {{- .Files.Get "deploy/prometheus/prometheus.yml" | nindent 4 }}
+{{- end }}

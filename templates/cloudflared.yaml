@@ -1,0 +1,67 @@
+{{/*
+Túnel de demo hacia internet — cloudflared en modo "quick tunnel".
+
+QUÉ HACE: abre una conexión SALIENTE a Cloudflare y publica el Service de
+Grafana en una URL https aleatoria (*.trycloudflare.com). No se abre ningún
+puerto en el router, no hace falta IP pública y funciona detrás de CGNAT — el
+pod llama hacia fuera, nadie llama hacia dentro.
+
+POR QUÉ replicas: 0 POR DEFECTO. Es un INTERRUPTOR DE DEMO, no una puerta
+permanente. Un quick tunnel NO admite Cloudflare Access, así que lo único que
+hay delante de Grafana es (a) que la URL es inadivinable y (b) que el visitante
+entra en modo lectura. Basta para una ventana corta y vigilada; no para dejarlo
+encendido sin mirar (con 24 h abierto entraron 5 IPs distintas). Con replicas: 0
+el estado deseado en git es "apagado": si el clúster se reinicia, NO se reabre.
+
+  Encender:  kubectl -n sentinel scale deploy/cloudflared --replicas=1
+  La URL:    kubectl -n sentinel logs deploy/cloudflared | grep trycloudflare
+  Apagar:    kubectl -n sentinel scale deploy/cloudflared --replicas=0
+
+El escalado a mano SOBREVIVE a ArgoCD por el ignoreDifferences + el
+RespectIgnoreDifferences declarados en la Application (decisión #47). Esa regla
+casa por `name: cloudflared`: NO renombrar este Deployment ni dejar que Helm le
+ponga el release por delante, o la regla dejará de casar SIN ERROR NINGUNO y el
+túnel se apagará solo en el siguiente sync. Ver la cabecera de values.yaml.
+
+CUANDO HAYA DOMINIO: se sustituye el flag --url por un túnel con nombre
+(`tunnel run` + token en el Secret cifrado) y Cloudflare Access delante. Cambia
+la configuración de este contenedor, no la arquitectura.
+*/}}
+{{- if .Values.cloudflared.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sentinel.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.cloudflared.replicas }} # 0 por defecto: ver cabecera
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflared
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cloudflared
+        {{- include "sentinel.labels" . | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532 # la imagen es distroless y trae el usuario nonroot
+      containers:
+        - name: cloudflared
+          image: {{ .Values.cloudflared.image }}
+          args:
+            - tunnel
+            - --no-autoupdate # en un contenedor, actualizar = cambiar el tag
+            - --url
+            - {{ .Values.cloudflared.target }} # el Service in-cluster, por DNS de K8s
+          resources:
+            {{- toYaml .Values.cloudflared.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+{{- end }}

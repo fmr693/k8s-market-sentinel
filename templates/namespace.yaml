@@ -1,0 +1,17 @@
+{{/*
+El namespace propio: aísla todo lo del proyecto (recursos, secretos, RBAC
+futuro) y permite borrarlo entero con un solo comando.
+
+Con `enabled: false` lo crea otro (ArgoCD con CreateNamespace=true, o un
+`helm install --create-namespace`). Se deja en true por defecto para que
+`helm template . | kubectl apply -f -` funcione de una pasada, como hacía
+`kubectl apply -k .`.
+*/}}
+{{- if .Values.namespace.create }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  labels:
+    {{- include "sentinel.labels" . | nindent 4 }}
+{{- end }}

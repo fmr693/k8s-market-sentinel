@@ -1,0 +1,265 @@
+# Valores por defecto del chart — el despliegue "de casa" (k3d contra Neon).
+#
+# ESTE FICHERO ES LA GUÍA DE PORTADO. La tesis del proyecto es que la carga
+# financiera es intercambiable y la plataforma no; el sitio donde eso se toca
+# es aquí. Llevarse el patrón a otro dominio de datos es, en lo que respecta al
+# despliegue, escribir otro values.yaml: otras fuentes en config/, otros
+# horarios, otras caras del CLI.
+#
+# ---------------------------------------------------------------------------
+# NOMBRES FIJOS, A PROPÓSITO (y en contra del idiom de Helm)
+# ---------------------------------------------------------------------------
+# Los recursos NO llevan el nombre del release como prefijo (nada de
+# `{{ .Release.Name }}-grafana`). Es deliberado y hay que saber por qué antes
+# de "arreglarlo":
+#
+#   1. Hay nombres de Service cableados en ficheros que COMPARTEN el clúster y
+#      el docker-compose de desarrollo: prometheus.yml apunta a
+#      `poller-metrics:8000` y `pushgateway:9091`, el datasource de Grafana a
+#      `http://prometheus:9090` y cloudflared a `http://grafana:3000`.
+#      Prefijar los nombres rompería el compose, que no tiene releases.
+#   2. El `ignoreDifferences` de la Application de ArgoCD casa el interruptor
+#      del túnel por `name: cloudflared`. Si el Deployment pasara a llamarse
+#      `sentinel-cloudflared`, la regla dejaría de casar SIN ERROR NINGUNO y el
+#      túnel se apagaría solo en el siguiente sync (el bug de la decisión #47,
+#      que ya se pagó una vez).
+#
+# La consecuencia asumida: este es un chart de INSTANCIA ÚNICA. Un release por
+# clúster. No sirve para instalar dos copias en el mismo namespace, y no falta
+# hacer que sirva: el estado real vive en Neon, no en el clúster.
+# ---------------------------------------------------------------------------
+
+# Imagen única multi-comando (decisión #5 del brief): K8s elige la "cara" del
+# CLI vía args. Se publica en GHCR desde el CI al etiquetar v*.
+image:
+  repository: ghcr.io/fmr693/k8s-market-sentinel
+  # Vacío = usa appVersion de Chart.yaml. Dejarlo así mantiene la versión de la
+  # aplicación en UN solo sitio; rellenarlo solo para probar un tag suelto.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Label común de todos los recursos (así `kubectl get all -l ...` los saca todos).
+partOf: k8s-market-sentinel
+
+# El namespace propio. `create: false` si lo crea otro (ArgoCD con
+# CreateNamespace=true, o `helm install --create-namespace`).
+namespace:
+  create: true
+
+# Secret con DATABASE_URL, FRED_API_KEY, credenciales de Grafana... NO lo crea
+# este chart: vive cifrado en el repo (SOPS+age, decisión #39) y lo aplica su
+# propia Application de ArgoCD vía KSOPS. El chart solo lo CONSUME por nombre.
+# Ese reparto es lo que permite que el chart sea público sin filtrar nada.
+secretName: sentinel-env
+
+# ---------------------------------------------------------------------------
+# Componentes: qué se despliega
+# ---------------------------------------------------------------------------
+# Cada uno con su `enabled`. AQUÍ está lo que kustomize hacía mal y por lo que
+# el chart se gana el sueldo: apagar un componente era comentar su línea en
+# kustomization.yaml (una edición del repo, no una decisión de entorno) o
+# inventarse un overlay entero. Ahora un entorno mínimo —una demo en un portátil
+# ajeno, un servidor sin disco que dedicar a métricas— es un `--set`.
+#
+# Combinaciones pensadas:
+#   Todo (defecto)                 el despliegue de casa: k3d + Neon
+#   --set prometheus.enabled=false sin observabilidad ni PVC (clúster efímero)
+#   --set cloudflared.enabled=false sin túnel (servidor con acceso propio)
+#   --set poller.enabled=false     solo carril lento (máquina que no está en horario de mercado)
+
+# El poller intradía: el único proceso vivo de la aplicación.
+poller:
+  enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      # Más generoso que los CronJobs: pandas+yfinance viven horas, no minutos.
+      # Si una fuga lo pasa, K8s lo mata -> gap-fill al renacer.
+      memory: 768Mi
+
+grafana:
+  enabled: true
+  image: grafana/grafana:12.0.0
+  # Claves del Secret que Grafana recibe, una a una. NO se usa envFrom: es la
+  # pieza con UI expuesta y no debe ver DATABASE_URL (owner) ni FRED_API_KEY.
+  # Añadir una clave aquí es una decisión de seguridad, no un detalle.
+  secretEnv:
+    - GRAFANA_DB_HOST
+    - GRAFANA_DB_NAME
+    - GRAFANA_DB_USER
+    - GRAFANA_DB_PASSWORD
+    - GRAFANA_DB_SSLMODE
+  # Acceso de visitante (fase 12). Con `enabled: false` Grafana vuelve a pedir
+  # login — que es lo que quieres en un despliegue permanente con dominio y
+  # Cloudflare Access delante, en vez del túnel efímero.
+  anonymous:
+    enabled: true
+    role: Viewer
+    homeDashboard: cef-sentinel.json
+  service:
+    type: NodePort
+    nodePort: 30300
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+prometheus:
+  enabled: true
+  image: prom/prometheus:v3.5.0 # línea LTS; bump editando aquí
+  retention: 15d
+  persistence:
+    size: 2Gi # 2-3 targets a 30s con 15d de retención ocupan muy por debajo de 1Gi
+    # VACÍO = usa la StorageClass default del clúster (local-path en k3d y en el
+    # k3s del Ubuntu) -> portable, el criterio rector. La plantilla OMITE el
+    # campo cuando está vacío, que no es lo mismo que ponerlo a "": una cadena
+    # vacía DESACTIVA el aprovisionamiento dinámico y deja el PVC en Pending.
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+# Pushgateway: el buzón de métricas de los CronJobs, que viven menos que un
+# scrape. Si `url` se deja vacío, los ingestores NO empujan y degradan solos —
+# el push está gateado por la env var, y ausente es un no-op.
+pushgateway:
+  enabled: true
+  image: prom/pushgateway:v1.11.0 # línea estable; bump editando aquí
+  url: http://pushgateway:9091
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+
+# Túnel de demo. Se despliega ENCENDIDO como recurso pero con CERO réplicas:
+# existe en el clúster, apagado. Ver la cabecera de templates/cloudflared.yaml
+# para por qué esa distinción importa y por qué el nombre no se puede tocar.
+cloudflared:
+  enabled: true
+  image: cloudflare/cloudflared:2025.7.0
+  replicas: 0 # el interruptor. No subirlo aquí: se enciende con `kubectl scale`
+  target: http://grafana:3000
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+# ---------------------------------------------------------------------------
+# Ficheros de configuración montados en los pods
+# ---------------------------------------------------------------------------
+# UNA definición que alimenta DOS cosas: el ConfigMap que se genera desde el
+# fichero del repo, y el montaje + env var con que el job lo encuentra. Antes
+# esto vivía repartido entre el configMapGenerator de kustomize y el volumen de
+# cada CronJob, y había que acordarse de tocar los dos sitios.
+#
+# `source` es la ruta DENTRO del chart (= del repo: el chart vive en la raíz).
+configFiles:
+  tickers:
+    configMap: sentinel-tickers
+    volume: tickers
+    source: config/tickers.yaml
+    key: tickers.yaml
+    envVar: TICKERS_FILE
+  quality:
+    configMap: sentinel-quality-checks
+    volume: quality-checks
+    source: config/quality_checks.yaml
+    key: quality_checks.yaml
+    envVar: QUALITY_CHECKS_FILE
+
+# ---------------------------------------------------------------------------
+# Carril lento: los CronJobs de ingesta
+# ---------------------------------------------------------------------------
+# Lo que comparten los 7 (documentado en su día en cronjob-prices.yaml):
+#   - timeZone: el horario vive en la zona del operador, con DST incluido. Sin
+#     este campo habría que hacer cuentas UTC<->CET dos veces al año.
+#   - concurrencyPolicy Forbid: si una ejecución se alarga, la siguiente no se
+#     solapa (dos backfills del mismo ticker = carrera inútil).
+#   - startingDeadlineSeconds: si el clúster estaba apagado a la hora prevista,
+#     la ejecución perdida solo se recupera dentro de esa ventana. Perderla NO
+#     es problema: el backfill idempotente se pone al día en la siguiente.
+#   - restartPolicy Never + backoffLimit: ante fallo, pods nuevos (logs
+#     separados, más fáciles de leer que restarts in-place).
+cronDefaults:
+  timeZone: "Europe/Madrid"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  backoffLimit: 2
+  activeDeadlineSeconds: 900
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      # pandas tiene apetito; sin límite de CPU (throttling inútil en batch).
+      memory: 512Mi
+
+# Añadir un ingestor nuevo = añadir una entrada aquí. No hay fichero que copiar.
+#   name    -> nombre del CronJob y del contenedor
+#   args    -> la cara del CLI (`sentinel <args>`)
+#   config  -> qué entrada de configFiles se le monta
+cronjobs:
+  - name: ingest-prices
+    schedule: "5 23 * * 1-5" # L-V 23:05, tras el cierre USA (22:00 CET)
+    args: ["ingest-prices"]
+    config: tickers
+
+  - name: ingest-nav
+    # 23:20, un poco después del cierre. CEFConnect puede publicar el NAV del
+    # día más tarde (madrugada CET); si esta ejecución no lo pilla, el upsert
+    # de la ventana 1Y lo recoge al día siguiente. Autosanado.
+    schedule: "20 23 * * 1-5"
+    args: ["ingest-nav"]
+    config: tickers
+
+  - name: ingest-nav-proxy
+    schedule: "20 23 * * 1-5" # a la vez que el NAV: el cross-check compara ambos
+    args: ["ingest-nav-proxy"]
+    config: tickers
+
+  - name: ingest-macro
+    schedule: "10 23 * * 1-5"
+    args: ["ingest-macro"]
+    config: tickers
+    activeDeadlineSeconds: 600
+
+  - name: ingest-fx
+    schedule: "45 16 * * 1-5" # el fixing del BCE se publica ~16:00 CET
+    args: ["ingest-fx"]
+    config: tickers
+    activeDeadlineSeconds: 600
+
+  - name: ingest-distributions
+    schedule: "15 23 * * 1-5"
+    args: ["ingest-distributions"]
+    config: tickers
+    activeDeadlineSeconds: 600
+
+  - name: check-quality
+    # A diario (no solo L-V): así registra también el estado del fin de semana.
+    # Se programa DESPUÉS de las ingestas nocturnas, para medir la frescura
+    # cuando el dato ACABA de refrescarse — un check en warn/fail señala
+    # entonces una ingesta que no corrió, no un desfase esperado.
+    schedule: "45 23 * * *"
+    args: ["check-quality"]
+    config: quality
+    activeDeadlineSeconds: 300 # los checks son SELECTs rápidos
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 256Mi # solo SELECTs + unos INSERTs: apetito mínimo

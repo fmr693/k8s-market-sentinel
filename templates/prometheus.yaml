@@ -1,0 +1,138 @@
+{{/*
+Prometheus: la observabilidad de PROCESO que el SQL-sobre-Neon no ve (ticks,
+fallos, filas por job, frescura). Su TSDB es EL PRIMER estado cluster-local del
+proyecto — "el trofeo stateful": todo lo demás se externaliza a Neon, esto no
+(y por eso NO sobrevive a un teardown del clúster: son métricas operativas, y
+es aceptable).
+
+Desplegado "a pelo" (Deployment + ConfigMap + PVC), sin Operator ni
+kube-prometheus-stack: mismo criterio que SQL-sin-ORM — se ve exactamente qué
+corre. Que ahora el despliegue sea un chart no cambia ese criterio: seguimos
+sin depender de un chart de terceros para esto.
+*/}}
+{{- if .Values.prometheus.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: prometheus
+    {{- include "sentinel.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ .Values.prometheus.persistence.size }}
+  {{- with .Values.prometheus.persistence.storageClass }}
+  # OJO: este campo se omite si el valor está vacío, y la diferencia importa.
+  # storageClassName ausente = "usa la default del clúster" (local-path en k3d y
+  # en el k3s del Ubuntu) -> portable, el criterio rector.
+  # storageClassName: "" (cadena vacía) significa lo contrario: DESACTIVA el
+  # aprovisionamiento dinámico y el PVC se queda Pending para siempre.
+  storageClassName: {{ . }}
+  {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: prometheus
+    {{- include "sentinel.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # Recreate y no RollingUpdate: 1 réplica monta 1 PVC ReadWriteOnce; rolling
+  # levantaría el pod nuevo antes de soltar el viejo -> los dos peleando por el
+  # mismo volumen. Mismo razonamiento que el poller (decisión #24).
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  template:
+    metadata:
+      annotations:
+        # Cambiar prometheus.yml reinicia el pod, que relee la config entera al
+        # arrancar (la TSDB persiste en el PVC). Sustituye al `POST /-/reload`
+        # manual que había que acordarse de lanzar; --web.enable-lifecycle se
+        # queda igualmente para poder recargar en caliente sin reinicio.
+        checksum/config: {{ include "sentinel.checksum" (list . (list "deploy/prometheus/prometheus.yml")) }}
+      labels:
+        app.kubernetes.io/name: prometheus
+        {{- include "sentinel.labels" . | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534 # 'nobody', el usuario por defecto de prom/prometheus
+        runAsGroup: 65534
+        # EL GOTCHA (hermano del uid-1000 numérico de la decisión #19): un PVC
+        # nace propiedad de root. Sin fsGroup, 'nobody' no puede escribir la
+        # TSDB en /prometheus -> CrashLoop. fsGroup marca el volumen como del
+        # grupo 65534 (Kubernetes se lo aplica al montarlo).
+        fsGroup: 65534
+      containers:
+        - name: prometheus
+          image: {{ .Values.prometheus.image }}
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            # Retención acotada: el PVC nunca se llena solo (poda automática).
+            - --storage.tsdb.retention.time={{ .Values.prometheus.retention }}
+            # Permite recargar la config con POST /-/reload sin reiniciar el
+            # pod. Fallback crash-only: borrar el pod y renace releyendo la
+            # config — la TSDB persiste en el PVC.
+            - --web.enable-lifecycle
+          ports:
+            - containerPort: 9090
+              name: http
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+              readOnly: true
+            - name: data
+              mountPath: /prometheus
+          resources:
+            {{- toYaml .Values.prometheus.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9090
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9090
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: prometheus-data
+---
+# ClusterIP (no NodePort): Prometheus es infra interna; a su UI se llega por
+# `kubectl port-forward svc/prometheus 9090`. Grafana lo consulta por DNS
+# in-cluster: http://prometheus:9090 (cableado en el datasource).
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: prometheus
+    {{- include "sentinel.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: prometheus
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 9090
+{{- end }}

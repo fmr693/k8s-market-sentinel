@@ -1,0 +1,85 @@
+{{/*
+El carril lento entero: los 7 CronJobs de ingesta y calidad, desde una sola
+plantilla.
+
+Antes eran 7 ficheros de ~50 líneas útiles que se diferenciaban en cinco campos
+(nombre, schedule, args, activeDeadlineSeconds, recursos) y en qué ConfigMap
+montaban. Copiar un fichero para añadir un ingestor funcionaba, pero significaba
+que un cambio en las decisiones COMUNES —el timeZone, el backoffLimit, la
+política de concurrencia— había que aplicarlo siete veces y acordarse de las
+siete. Aquí las comunes viven en cronDefaults y lo variable en la lista.
+
+Es el mismo principio config-driven que el proyecto ya aplica a los tickers y a
+los checks de calidad (la verdad en un YAML, el código sin tocar), subido a la
+capa de despliegue: añadir un ingestor es añadir cuatro líneas a values.yaml.
+
+El PUSHGATEWAY_URL se inyecta aquí, donde se lee. Antes era un patch de
+kustomize que apuntaba a `kind: CronJob` desde otro fichero — DRY, pero había
+que ir a buscarlo para entender de dónde salía esa variable.
+*/}}
+{{- $root := . -}}
+{{- range .Values.cronjobs }}
+{{- $cfg := index $root.Values.configFiles .config -}}
+{{- if not $cfg }}{{ fail (printf "El CronJob %q referencia configFiles.%s, que no existe en values.yaml" .name .config) }}{{ end }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .name }}
+  namespace: {{ $root.Release.Namespace }}
+  labels:
+    {{- include "sentinel.labels" $root | nindent 4 }}
+spec:
+  schedule: {{ .schedule | quote }}
+  timeZone: {{ $root.Values.cronDefaults.timeZone | quote }}
+  concurrencyPolicy: {{ $root.Values.cronDefaults.concurrencyPolicy }}
+  startingDeadlineSeconds: {{ $root.Values.cronDefaults.startingDeadlineSeconds }}
+  successfulJobsHistoryLimit: {{ $root.Values.cronDefaults.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ $root.Values.cronDefaults.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ $root.Values.cronDefaults.backoffLimit }}
+      activeDeadlineSeconds: {{ .activeDeadlineSeconds | default $root.Values.cronDefaults.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            {{- include "sentinel.labels" $root | nindent 12 }}
+        spec:
+          restartPolicy: Never
+          securityContext:
+            # La imagen ya corre como uid 1000; aquí se EXIGE.
+            runAsNonRoot: true
+          containers:
+            - name: {{ .name }}
+              image: {{ include "sentinel.image" $root }}
+              imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+              args: {{ toJson .args }}
+              envFrom:
+                - secretRef:
+                    name: {{ $root.Values.secretName }}
+              env:
+                - name: {{ $cfg.envVar }}
+                  value: /config/{{ $cfg.key }}
+                {{- if and $root.Values.pushgateway.enabled $root.Values.pushgateway.url }}
+                - name: PUSHGATEWAY_URL
+                  value: {{ $root.Values.pushgateway.url | quote }}
+                {{- end }}
+                {{/*
+                  Las DOS condiciones, no solo la url: con el pushgateway
+                  apagado pero la url puesta (su valor por defecto), los jobs
+                  seguirían empujando a un Service que ya no existe y cada
+                  ingesta gastaría su timeout contra la nada. La degradación
+                  buena es la documentada — env ausente = no-op — y para eso
+                  hay que mirar también si el componente está desplegado.
+                */}}
+              volumeMounts:
+                - name: {{ $cfg.volume }}
+                  mountPath: /config
+                  readOnly: true
+              resources:
+                {{- toYaml (.resources | default $root.Values.cronDefaults.resources) | nindent 16 }}
+          volumes:
+            - name: {{ $cfg.volume }}
+              configMap:
+                name: {{ $cfg.configMap }}
+{{- end }}

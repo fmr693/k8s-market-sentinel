@@ -1,0 +1,41 @@
+# Chart de Helm del despliegue completo (fase 11).
+#
+# ¿Por qué el chart vive en la RAÍZ del repo y no en deploy/chart/?
+# Por la misma restricción que ya obliga a kustomization.yaml a estar aquí:
+# Helm solo puede leer ficheros de DENTRO del chart (.Files.Get), y los que
+# alimentan el despliegue —config/tickers.yaml, config/quality_checks.yaml,
+# los dashboards, prometheus.yml— viven arriba. Un chart en deploy/chart/
+# obligaría a duplicarlos, que es justo el pecado que el diseño config-driven
+# evita en todo el proyecto: UNA fuente de verdad por fichero.
+#
+# apiVersion v2 = formato de Helm 3. IMPORTANTE: el repo-server de ArgoCD
+# lleva su propio Helm embebido (v3.19.4 medido en el clúster, argocd v3.4.5),
+# así que el chart NO puede usar nada exclusivo de Helm 4 aunque en la máquina
+# de desarrollo haya un Helm 4: renderizaría en local y rompería en el clúster.
+# La autoridad de lo que se despliega es ArgoCD, no el `helm template` de casa.
+apiVersion: v2
+name: k8s-market-sentinel
+description: Plataforma Kubernetes-nativa de vigilancia de CEFs de crédito (ingesta, medallón sobre Postgres, Grafana y observabilidad)
+type: application
+
+# version    = versión del CHART (cambia cuando cambian los manifiestos)
+# appVersion = versión de la APLICACIÓN (la imagen publicada en GHCR)
+#
+# values.yaml deja image.tag vacío a propósito para que caiga en appVersion:
+# así la versión de la app sigue viviendo en UN solo sitio del chart, en vez
+# de sumar un sexto lugar que actualizar en cada release.
+version: 0.1.0
+appVersion: "0.8.0"
+
+home: https://github.com/fmr693/k8s-market-sentinel
+sources:
+  - https://github.com/fmr693/k8s-market-sentinel
+keywords:
+  - kubernetes
+  - data-engineering
+  - medallion
+  - grafana
+  - gitops
+maintainers:
+  - name: fmr693
+    url: https://github.com/fmr693

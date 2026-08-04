@@ -1,0 +1,113 @@
+{{/*
+El poller intradía: el único proceso VIVO de la aplicación, frente a los
+CronJobs que nacen y mueren. La lógica de "cuándo trabajar" NO vive aquí — el
+proceso decide solo con el calendario XNYS (market_hours.py); K8s solo
+garantiza que exista.
+
+Se parametriza poco a propósito: las probes, la estrategia y el puerto no son
+ejes de variación entre entornos, son DECISIONES. Convertirlas en values sería
+templating por templatear, y escondería el razonamiento detrás de una
+indirección. Lo que sí varía —imagen, recursos, si existe— está en values.yaml.
+*/}}
+{{- if .Values.poller.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: poller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sentinel.labels" . | nindent 4 }}
+spec:
+  # UNA copia: dos pollers harían el mismo trabajo dos veces (inofensivo por el
+  # upsert, pero absurdo). Lo que compra el Deployment es el reinicio
+  # automático, no el escalado.
+  replicas: 1
+  # Recreate y no RollingUpdate (default): rolling levantaría el pod nuevo ANTES
+  # de matar al viejo -> dos pollers unos segundos. Preferimos un hueco de
+  # segundos sin poller: lo cubre el gap-fill de arranque, gratis.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: poller
+  template:
+    metadata:
+      annotations:
+        # El poller lee el universo de tickers UNA vez, al arrancar. Sin esto,
+        # añadir un ticker a config/tickers.yaml no llegaba al proceso vivo
+        # hasta el siguiente reinicio por otra causa. Ahora el cambio reinicia
+        # el pod, y el gap-fill de arranque recupera lo que falte del nuevo.
+        # Los CronJobs no lo necesitan: nacen en cada ejecución y siempre leen
+        # la versión vigente del ConfigMap.
+        checksum/config: {{ include "sentinel.checksum" (list . (list .Values.configFiles.tickers.source)) }}
+      labels:
+        app.kubernetes.io/name: poller
+        {{- include "sentinel.labels" . | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: poller
+          image: {{ include "sentinel.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["poller"]
+          ports:
+            # /metrics para Prometheus: el poller es un proceso vivo -> modelo
+            # pull; el Service poller-metrics (abajo) publica este puerto.
+            - containerPort: 8000
+              name: metrics
+          envFrom:
+            - secretRef:
+                name: {{ .Values.secretName }}
+          env:
+            - name: {{ .Values.configFiles.tickers.envVar }}
+              value: /config/{{ .Values.configFiles.tickers.key }}
+          volumeMounts:
+            - name: {{ .Values.configFiles.tickers.volume }}
+              mountPath: /config
+              readOnly: true
+          resources:
+            {{- toYaml .Values.poller.resources | nindent 12 }}
+          # Liveness por FICHERO-LATIDO (decisión 4.4): el bucle toca
+          # /tmp/heartbeat en cada vuelta — tick de mercado o siesta de <=15
+          # min, da igual. Si el fichero envejece >20 min (15 de siesta máxima +
+          # margen), el bucle está colgado: matar y reiniciar (gap-fill
+          # mediante). El zombi se cura solo.
+          # `find` sale con 1 si el fichero no existe o no cumple el filtro.
+          # NO se migra la liveness al /metrics del 8000 (aunque la decisión #24
+          # lo dejó como opción): ese endpoint lo sirve un hilo daemon aparte y
+          # respondería 200 aunque el BUCLE esté colgado -> peor detector de
+          # zombis que el latido, que sí está acoplado al progreso del bucle.
+          livenessProbe:
+            exec:
+              command: ["find", "/tmp/heartbeat", "-newermt", "-20 minutes"]
+            initialDelaySeconds: 120 # el gap-fill de arranque puede tardar
+            periodSeconds: 120
+            failureThreshold: 3
+          # SIN readinessProbe, a conciencia: readiness decide si un Service te
+          # manda tráfico, y el poller no recibe tráfico de nadie. Ponerla sería
+          # cargo cult. (El scrape de Prometheus sí es tráfico — ver el Service
+          # de abajo — pero con 1 réplica no hay enrutado que decidir.)
+      volumes:
+        - name: {{ .Values.configFiles.tickers.volume }}
+          configMap:
+            name: {{ .Values.configFiles.tickers.configMap }}
+---
+# Service SOLO para que Prometheus scrapee el /metrics del poller.
+apiVersion: v1
+kind: Service
+metadata:
+  name: poller-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: poller
+    {{- include "sentinel.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: poller
+  ports:
+    - name: metrics
+      port: 8000
+      targetPort: 8000
+{{- end }}
