@@ -766,7 +766,7 @@
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT check_name AS \"Check\", round(value, 4) AS \"Value\", status AS \"Status\", run_ts AS \"Last run\", detail AS \"Detail\" FROM gold.data_quality_latest ORDER BY CASE status WHEN 'fail' THEN 0 WHEN 'error' THEN 1 WHEN 'warn' THEN 2 ELSE 3 END, check_name"
+          "rawSql": "SELECT check_name AS \"Check\", round(value, 4) AS \"Value\", status AS \"Status\", run_ts AS \"Last run\", round(extract(epoch FROM now() - run_ts) / 3600, 1) AS \"Age (h)\", detail AS \"Detail\" FROM gold.data_quality_latest ORDER BY CASE status WHEN 'fail' THEN 0 WHEN 'error' THEN 1 WHEN 'warn' THEN 2 ELSE 3 END, check_name"
         }
       ],
       "options": {
@@ -836,7 +836,7 @@
       "description": "Checks currently in 'fail' or 'error'. The CronJob runs nightly at 23:45 and exits non-zero on either, so K8s marks the Job failed too.",
       "gridPos": {
         "h": 4,
-        "w": 10,
+        "w": 5,
         "x": 14,
         "y": 27
       },
@@ -872,6 +872,62 @@
               {
                 "color": "red",
                 "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 21,
+      "type": "stat",
+      "title": "Data quality - are these verdicts current?",
+      "description": "Hours since check-quality last ran. The verdicts above are the LAST KNOWN ones, not necessarily current: a check that never runs writes no row, so an absent runner looks exactly like a passing one. The CronJob runs daily at 23:45, so >26h means it missed a run and the panel above is stale.",
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 19,
+        "y": 27
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "neon-sentinel"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT round(extract(epoch FROM now() - max(run_ts)) / 3600, 1) AS hours_since_last_run FROM gold.data_quality_results"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none",
+        "colorMode": "background"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 26
+              },
+              {
+                "color": "red",
+                "value": 50
               }
             ]
           }
