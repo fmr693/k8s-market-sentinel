@@ -1,7 +1,7 @@
 # Proyecto: k8s-market-sentinel (nombre provisional)
 
-> Prompt inicial / brief de proyecto. Contexto completo para arrancar desde cero.
-> Este documento puede usarse como primer prompt o guardarse como `CLAUDE.md` en la raíz del repo.
+> Brief inicial del proyecto. Contexto completo para arrancar desde cero.
+> Sirve de punto de partida para cualquiera que retome el proyecto.
 
 ## Quién soy y para qué es esto
 
